@@ -1,0 +1,650 @@
+/* === GLASS/FROSTED TOPBAR (fixed + doğru katmanlama) === */
+.topbar{
+  position: fixed;             /* sticky → fixed */
+  top: 0; left: 0; right: 0;
+  z-index: 600;
+  height: 56px;                /* ihtiyaca göre değişebilir */
+  background: transparent !important;
+  color: #fff;
+  border-bottom: 1px solid rgba(10, 10, 10, 0.711);
+  isolation: isolate;          /* kendi stacking context'i */
+}
+
+/* Cam katman: içerikten ALTA koy (z-index:0) */
+.topbar::before{
+  content: "";
+  position: absolute; inset: 0;
+  background: rgba(50, 50, 49, 0.917);
+  backdrop-filter: saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  box-shadow: 0 6px 24px rgba(130, 128, 121, 0.533);
+  pointer-events: none;
+  z-index: 0;                  /* ← önemli: içerikten altta */
+}
+
+/* İçerik üstte kalsın */
+.topbar > *{
+  position: relative;
+  z-index: 1;                  /* ← metin, butonlar görünür */
+}
+
+.topbar--compact{ padding:.45rem .9rem; height:46px; }
+.topbar__row{ display:flex; align-items:center; justify-content:space-between; min-height:48px; gap:.6rem; }
+.topbar__left, .topbar__right{ display:flex; align-items:center; gap:.6rem; }
+
+/* Bar “katı” görünmesin diye kontrolleri de hafif şeffaf bırak */
+.topbar .btn{
+  background: rgba(108, 156, 193, 0.557);
+  border: 1px solid rgba(240, 239, 232, 0.825);
+  color:#fff;
+}
+.topbar select, .topbar input{
+  background: rgba(46, 117, 130, 0.611);
+  border: 1px solid rgba(255,255,255,.16);
+  color:#fff;
+}
+
+
+.btn {
+  padding: .46rem .8rem;
+  border-radius: .6rem;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .06);
+  color: #fff;
+}
+
+.btn--primary {
+  background: #36c6df1a;
+  border-color: #f9fafc6e;
+}
+
+.btn--danger {
+  background: #d76d6d;
+  border-color: #59252556;
+}
+
+.btn--ghost {
+  background: transparent;
+}
+
+
+.btn--success {
+  background: #10b981;
+  border-color: #0e7a58;
+  color: #0b1b17;
+  font-weight: 600;
+}
+
+.btn--success:hover {
+  filter: brightness(1.03);
+}
+
+.btn--wide {
+  min-width: 150px;
+}
+
+.topbar__selectWrap {
+  display: flex;
+  gap: .4rem;
+  align-items: center;
+}
+
+.topbar select,
+.topbar input {
+  height: 36px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, .20);
+  color: #fff;
+  padding: .3rem .5rem;
+  border-radius: .5rem;
+}
+
+.topbar input::placeholder {
+  color: rgba(255, 255, 255, .65);
+}
+
+.topbar__panel {
+  margin-top: .5rem;
+  padding: .7rem;
+  border-radius: .7rem;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .12);
+}
+
+.grid {
+  display: grid;
+  gap: .7rem;
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panelSection {
+  margin-top: .9rem;
+  padding-top: .7rem;
+  border-top: 1px dashed rgba(255, 255, 255, .2);
+}
+
+.panelTitle {
+  font-weight: 600;
+  margin-bottom: .5rem;
+  font-size: .95rem;
+  opacity: .9;
+}
+
+/* --- Overlay + Drawer --- */
+.drawerOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
+  z-index: 499;
+}
+
+.drawerOverlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawerPanel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(400px, 92vw);
+  background: rgba(15, 15, 15, 0.74);
+  color: #fff;
+  border-left: 1px solid rgba(255, 255, 255, 0.19);
+  transform: translateX(100%);
+  transition: transform .22s ease;
+  z-index: 700;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawerPanel.is-open {
+  transform: translateX(0);
+}
+
+.drawerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .8rem .9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, .12);
+}
+
+.iconBtn {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: .55rem;
+  padding: .25rem .55rem;
+  cursor: pointer;
+}
+
+.drawerBody {
+  box-sizing: border-box;
+  overflow-x: hidden;
+  padding: .9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1 1 auto;
+  /* ← yükseklik payını al */
+  min-height: 0;
+  /* ← flex overflow fix */
+  overflow-y: auto;
+  /* ← dikey kaydır */
+  overflow-x: hidden;
+  /* ← yatay kaydırmayı kapat */
+}
+
+.group {
+  padding: .6rem .7rem;
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: .7rem;
+  background: rgba(255, 255, 255, .04);
+}
+
+.groupTitle {
+  font-weight: 600;
+  margin-bottom: .6rem;
+  opacity: .9;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  margin-bottom: .6rem;
+}
+
+.field input {
+  height: 38px;
+  border-radius: .55rem;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .18);
+  color: #fff;
+  padding: .35rem .6rem;
+}
+
+.btnRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+/* ===========================
+   FlightPlanner — şık & kompakt
+   =========================== */
+.plannerForm {
+  display: grid;
+  gap: .5rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+}
+
+/* Sticky alt bar: buton her zaman görünür */
+.plannerSticky {
+  position: sticky;
+  bottom: 0;
+  padding-top: .6rem;
+  background: linear-gradient(to top, rgba(18, 18, 20, .96), rgba(18, 18, 20, .65) 40%, transparent);
+}
+
+@media (max-width: 1100px) {
+  .plannerForm {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .plannerForm {
+    grid-template-columns: 1fr;
+  }
+}
+
+.plannerField {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+
+.plannerLabel {
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .2px;
+  color: rgba(255, 255, 255, .85);
+}
+
+.plannerInput {
+  height: 36px;
+  padding: .35rem .6rem;
+  border-radius: .55rem;
+  background: rgba(255, 255, 255, .10);
+  border: 1px solid rgba(255, 255, 255, .22);
+  color: #fff;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+
+.plannerInput::placeholder {
+  color: rgba(255, 255, 255, .55);
+}
+
+.plannerInput:focus {
+  border-color: #9f320d;
+  box-shadow: 0 0 0 3px rgba(80, 140, 255, .2);
+  background: rgb(111, 105, 105);
+}
+
+/* TopBar içinde kutulu görünüm için (opsiyonel) */
+.plannerInline {
+  display: flex;
+  align-items: end;
+  gap: .5rem;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: .7rem;
+  padding: .6rem;
+}
+
+/* === Planner Card === */
+.plannerCard {
+  max-width: 100%;
+  background: rgba(18, 18, 20, .52);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+}
+
+.plannerGrid {
+  display: grid;
+  gap: .85rem;
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 700px) {
+  .plannerGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inputWrap {
+  position: relative;
+}
+
+.inputWrap .inputIcon {
+  position: absolute;
+  inset: 0 auto 0 10px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  color: rgba(255, 255, 255, .65);
+  pointer-events: none;
+}
+
+.input {
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  height: 40px;
+  padding: .4rem .7rem .4rem 36px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .10);
+  color: #fff;
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+
+.input::placeholder {
+  color: rgba(255, 255, 255, .55);
+  font-weight: 500;
+}
+
+.input:focus {
+  border-color: #6aa9ff;
+  box-shadow: 0 0 0 3px rgba(80, 140, 255, .20);
+  background: rgba(255, 255, 255, .12);
+}
+
+/* alan başlığı */
+.fieldTitle {
+  display: block;
+  margin-bottom: .5rem;
+  font-size: .9rem;
+  font-weight: 700;
+  opacity: .86;
+}
+
+/* alt satır */
+.plannerRow {
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: .6rem;
+}
+
+.btn--primarySolid {
+  background: #2ea2ff;
+  border-color: #154c80;
+  color: #041521;
+  font-weight: 800;
+  height: 44px;
+  padding: .6rem 1rem;
+  border-radius: 10px;
+}
+
+.btn--primarySolid:hover {
+  filter: brightness(1.05);
+}
+
+.statusText {
+  font-size: .85rem;
+  opacity: .9;
+}
+
+.statusText--ok {
+  color: #86efac;
+}
+
+.statusText--err {
+  color: #fca5a5;
+}
+
+/* küçük badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .3rem .55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .16);
+  font-size: .75rem;
+  font-weight: 600;
+  color: #e6edf5;
+}
+/* === Option Grid / Cards === */
+.optionGrid {
+  display: grid;
+  gap: .5rem;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+}
+
+.optionGrid--tight {
+  grid-template-columns: repeat(2, minmax(0,1fr));
+}
+
+@media (max-width: 480px) {
+  .optionGrid,
+  .optionGrid--tight {
+    grid-template-columns: 1fr;
+  }
+}
+
+.optionCard {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .5rem .7rem;
+  border-radius: .9rem;
+  background: rgba(205, 183, 183, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.657);
+  color: #f3e9e9;
+  text-align: left;
+  cursor: pointer;
+}
+
+.optionCard.is-active {
+  border-color: #dfe8f4;
+  box-shadow: 0 0 0 2px rgba(80,140,255,.18) inset;
+  background: rgba(255,255,255,.10);
+}
+
+.optionIcon {
+  font-size: 1.4rem;
+  width: 30px;
+  text-align: center;
+}
+
+.optionText .optionTitle {
+  font-weight:300;
+  letter-spacing: .9px;
+}
+.optionText .optionDesc {
+  opacity: .85;
+  font-size: .85rem;
+}
+
+/* === Map style thumbnails === */
+.optionThumb {
+  display: grid;
+  grid-template-rows: 70px auto;
+  gap: .35rem;
+  padding: .5rem;
+  border-radius: .7rem;
+  background: rgba(95, 159, 255, 0.06);
+  border: 1px solid rgba(255,255,255,.14);
+  color: #fff;
+  cursor: pointer;
+  text-align: center;
+}
+
+.optionThumb.is-active {
+  border-color: #6aa9ff;
+  box-shadow: 0 0 0 3px rgba(80,140,255,.18) inset;
+  background: rgba(255,255,255,.10);
+}
+
+.optionThumb__img {
+  border-radius: .5rem;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255,255,255,.16);
+}
+
+.optionThumb__label {
+  font-size: .8rem;
+  opacity: .92;
+  font-weight: 700;
+}
+
+/* ===== Timeline (alt panel) ===== */
+.timeline {
+  background: rgba(18, 18, 19, 0.641);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(197, 173, 173, 0.35);
+  color: #feffff;
+  padding: 10px 12px;
+  display: grid;
+  gap: 10px;
+  backdrop-filter: blur(6px);
+}
+:root { --ctl-h: 36px; }
+
+.timeline__head { display:flex; align-items:center; justify-content:space-between; gap:.6rem; }
+.timeline__title { display:flex; align-items:center; gap:.6rem; font-weight:700; opacity:.92; }
+.timeline__controls { display:flex; align-items:center; flex-wrap:wrap; gap:.4rem; }
+
+.iconBtn--round {
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+.iconBtn--round:hover { filter: brightness(1.08); }
+.btn--sm { height: 34px; padding: .35rem .7rem; border-radius: .55rem; }
+
+.timeline__grid { display:grid; gap:.6rem; grid-template-columns: 1fr 1fr auto; }
+@media (max-width: 900px){ .timeline__grid{ grid-template-columns: 1fr; } }
+
+.timeline__status {
+  font-size:.8rem; padding:.35rem .55rem; border-radius:.55rem;
+  background: rgba(149, 62, 30, 0.065); border:1px solid rgba(255,255,255,.14);
+}
+
+/* === Sarı ışın kılıcı (soft gövde + parlak yuvarlak uç) === */
+.range{
+  -webkit-appearance:none;
+  width:100%; height:13px; border-radius:999px; border:none;
+  /* 1) soft glow (tam yükseklik)  2) parlak çekirdek (daha ince)  3) taban */
+  background:
+    linear-gradient(90deg, rgba(241,231,139,.35), rgba(241,231,139,.35)) no-repeat,
+    linear-gradient(90deg, #fffbe6, #f1e78b, #fffbe6) no-repeat,
+    rgba(255,255,255,.12);
+  /* width% + yükseklik: ikinci katman gövdeden daha ince (40%) */
+  background-size: 0% 100%, 0% 0%, 100% 100%;
+  background-position: left center, left center, 0 0;
+  background-repeat: no-repeat;
+  /* gövde parlamasını azalt: */
+  box-shadow: inset 0 0 6px rgba(255,255,255,.15);
+  transition: background-size .18s ease;
+}
+
+/* WebKit (Chrome/Edge/Safari) — UÇ: küçük, yuvarlak, parlak */
+.range::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:14px; height:14px; border-radius:90%;
+  /* merkez parlak, çevre sarı: */
+  background: radial-gradient(circle, #fffdf0 70%, #f4e985 95%, #d0b847 85%);
+  border: 1px solid rgba(208,184,71,.55);
+  /* ucu daha çok parlasın, arkası az: öne doğru yönlü ışık (x offset) */
+  box-shadow:
+    0 0 20px rgba(244,233,133,.85),
+    0 0 18px rgba(244,233,133,.65),
+    10px 0 10px rgba(244,233,133,.45); /* → öne doğru flare */
+  cursor:pointer;
+  transition: transform .08s ease;
+}
+.range::-webkit-slider-thumb:hover{ transform: scale(1.08); }
+
+/* Firefox */
+.range::-moz-range-thumb{
+  width:16px; height:16px; border-radius:50%;
+  background: radial-gradient(circle, #fffdf0 0%, #f4e985 45%, #d0b847 85%);
+  border: 1px solid rgba(208,184,71,.55);
+  box-shadow:
+    0 0 10px rgba(244,233,133,.85),
+    0 0 18px rgba(244,233,133,.65),
+    10px 0 10px rgba(244,233,133,.45);
+  cursor:pointer;
+}
+
+
+.timeline__ticks{ display:flex; justify-content:space-between; font-size:.78rem; opacity:.85; }
+/* Kapat (X) ikonunu */
+.iconBtn--round[title="Kapat"],
+.iconBtn--round[aria-label="Kapat"] {
+  color: #fff !important;
+  border-color: rgba(11, 11, 11, 0);
+}
+
+.iconBtn--round[title="Kapat"]:hover {
+  background: rgba(144, 148, 156, 0.44);
+}
+/* Timeline hız menüsü görünürlüğü fix */
+.btn.btn--sm select,
+select.btn,
+select.btn--sm {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #f3e8e8;
+  border-radius: .55rem;
+}
+
+select.btn option {
+  background: #1f1f1f; /* dropdown içi koyu zemin */
+  color: #fff;          /* beyaz yazı */
+}
+/* === Select menüler için koyu tema fix (global) === */
+select {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  border-radius: .55rem;
+}
+
+/* Açılan menü (dropdown) için */
+select option {
+  background: #1e1e1e;
+  color: #fff;
+}
