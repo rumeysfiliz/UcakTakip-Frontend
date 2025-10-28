@@ -1,5 +1,6 @@
 import React from "react"
 import type { UcusPlani, UcakKonum } from "../types"
+import { fmtTurkeyTime, toTurkeyTime } from "../lib/time"
 
 type Props = {
   flight: UcusPlani
@@ -12,25 +13,6 @@ type Props = {
 
 //İlerleme oranı hesaplanırken taşma olmasın diye min max
 function clamp(n: number, min = 0, max = 1) { return Math.max(min, Math.min(max, n)) }
-
-// Backend verileri UTC biz frontend'de TSİ formatına çevirmek için.
-function fmtTSI(d?: string | Date | null) {
-  if (!d) return "—"
-  const dt = typeof d === "string" ? new Date(d) : d
-  return new Intl.DateTimeFormat("tr-TR", {
-    timeZone: "Europe/Istanbul",
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false
-  }).format(dt)
-}
-//Kartın orta bölümündeki kalkış varış saatleri TSİ yapmak için.
-function hhmmTSI(d: Date | string) {
-  const dt = typeof d === "string" ? new Date(d) : d
-  return new Intl.DateTimeFormat("tr-TR", {
-    timeZone: "Europe/Istanbul",
-    hour: "2-digit", minute: "2-digit", hour12: false
-  }).format(dt) + " TSİ"
-}
 
 //Kartın tüm yaşam döngüsü ve render'ı burada.
 export default function FlightInfoCard({
@@ -60,19 +42,10 @@ export default function FlightInfoCard({
     const endForCalc = plannedEnd
       ? plannedEnd
       : new Date(start.getTime() + (ref.getTime() - start.getTime()) * 2)
-
-    // Eğer zamanlar mantıksızsa (örneğin bitiş başlangıçtan önceyse) koruma
-    if (endForCalc <= start) {
-      progress = 0
-    } else {
-      progress = clamp(
-        (ref.getTime() - start.getTime()) / (endForCalc.getTime() - start.getTime())
-      )
-    }
+    progress = endForCalc <= start ? 0 :
+      clamp((ref.getTime() - start.getTime()) / (endForCalc.getTime() - start.getTime()))
     durationText = `${((ref.getTime() - start.getTime()) / 36e5).toFixed(1)} saat`
   }
-
-
 
   //İlerleme bandı için burası 
   const progressColor =
@@ -122,8 +95,14 @@ export default function FlightInfoCard({
       >
         <div style={{ textAlign: "center", minWidth: 120 }}>
           <div style={{ fontSize: 18, fontWeight: 800 }}>{flight.origin}</div>
-          <div style={{ opacity: .85 }}>{hhmmTSI(start)}</div>
-          <div style={{ fontSize: 12, color: progressColor }}>{statusLabel}</div>
+          <div style={{ opacity: .85 }}>
+            {new Intl.DateTimeFormat("tr-TR", {
+              timeZone: "Europe/Istanbul",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            }).format(toTurkeyTime(flight.startTimeUtc))} TSİ
+          </div>          <div style={{ fontSize: 12, color: progressColor }}>{statusLabel}</div>
         </div>
         {/* orta ikon (GIF, düzen sabit) */}
         <div aria-hidden style={{ opacity: .95, width: 86, height: 86, display: "grid", placeItems: "center" }}>
@@ -136,12 +115,17 @@ export default function FlightInfoCard({
           />
         </div>
 
-
         <div style={{ textAlign: "center", minWidth: 120 }}>
           <div style={{ fontSize: 18, fontWeight: 800 }}>{flight.destination}</div>
           <div style={{ opacity: .85 }}>
-            {hhmmTSI(plannedEnd ?? new Date(flight.endTimeUtc ?? Date.now()))}
+            {new Intl.DateTimeFormat("tr-TR", {
+              timeZone: "Europe/Istanbul",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            }).format(toTurkeyTime(flight.endTimeUtc ?? new Date().toISOString()))} TSİ
           </div>
+
           <div style={{ fontSize: 12, color: progressColor }}>{statusLabel}</div>
         </div>
       </div>
@@ -246,15 +230,14 @@ export default function FlightInfoCard({
         <div style={{ fontVariantNumeric: "tabular-nums" }}>{flight.id}</div>
 
         <div style={{ opacity: .75, fontWeight: 600 }}>Başlangıç (TSİ)</div>
-        <div style={{ fontVariantNumeric: "tabular-nums" }}>{fmtTSI(flight.startTimeUtc)}</div>
+        <div>{fmtTurkeyTime(flight.startTimeUtc)}</div>
 
         {flight.endTimeUtc && (
           <>
             <div style={{ opacity: .75, fontWeight: 600 }}>Bitiş (TSİ)</div>
-            <div style={{ fontVariantNumeric: "tabular-nums" }}>{fmtTSI(flight.endTimeUtc)}</div>
+            <div>{fmtTurkeyTime(flight.endTimeUtc)}</div>
           </>
         )}
-
         <div style={{ opacity: .75, fontWeight: 600 }}>Durum</div>
         <div>{statusLabel}</div>
 
@@ -268,8 +251,7 @@ export default function FlightInfoCard({
       {last ? (
         <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", columnGap: 10, rowGap: 6, fontSize: 13 }}>
           <div style={{ opacity: .75, fontWeight: 600 }}>Son kayıt (TSİ)</div>
-          <div style={{ fontVariantNumeric: "tabular-nums" }}>{fmtTSI(last.timestampUtc)}</div>
-
+          <div>{fmtTurkeyTime(last.timestampUtc)}</div>
           <div style={{ opacity: .75, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 22s7-8 7-12a7 7 0 10-14 0c0 4 7 12 7 12z" stroke="currentColor" strokeWidth="2" /></svg>
             Konum

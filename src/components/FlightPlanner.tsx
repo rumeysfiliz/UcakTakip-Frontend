@@ -6,12 +6,13 @@ type Props = { onCreated?: (f: UcusPlani) => void; className?: string }
 // onCreated: Yeni uçuş eklendiğinde üst bileşene haber ver
 // className: Dışarıdan özel CSS sınıfı eklemek için
 
+
 const IATA = [
-  "IST","SAW","ESB","ADB","AYT","AMS","BER","FRA","CDG","LHR","LGW","FCO","MXP","ATH",
-  "ZRH","BCN","MAD","LIS","BRU","VIE","PRG","BUD","WAW","OSL","CPH","HEL","DUB","ARN",
-  "JFK","LAX","ORD","ATL","DFW","MIA","YYZ","YVR","MEX","DXB","DOH","RUH","JED",
-  "DEL","BOM","SIN","KUL","BKK","HKG","ICN","NRT","HND","PEK","PVG","TPE","SYD","MEL","AKL",
-  "GRU","EZE","SCL","LIM","BOG","CPT","JNB","ADD","NBO","CMN","LOS"
+  "IST", "SAW", "ESB", "ADB", "AYT", "AMS", "BER", "FRA", "CDG", "LHR", "LGW", "FCO", "MXP", "ATH",
+  "ZRH", "BCN", "MAD", "LIS", "BRU", "VIE", "PRG", "BUD", "WAW", "OSL", "CPH", "HEL", "DUB", "ARN",
+  "JFK", "LAX", "ORD", "ATL", "DFW", "MIA", "YYZ", "YVR", "MEX", "DXB", "DOH", "RUH", "JED",
+  "DEL", "BOM", "SIN", "KUL", "BKK", "HKG", "ICN", "NRT", "HND", "PEK", "PVG", "TPE", "SYD", "MEL", "AKL",
+  "GRU", "EZE", "SCL", "LIM", "BOG", "CPT", "JNB", "ADD", "NBO", "CMN", "LOS"
 ];
 
 /** datetime-local için (yerel TZ’de) YYYY-MM-DDTHH:mm üretir */
@@ -31,7 +32,7 @@ export default function FlightPlanner({ onCreated, className }: Props) {
   const [code, setCode] = useState('THY203')
   const [origin, setOrigin] = useState('IST')         // Kalkış
   const [destination, setDestination] = useState('LHR') // Varış
-  const [start, setStart] = useState(localIsoMinute())  // TSİ/yerel görünüm
+  const [start, setStart] = useState(localIsoMinute()) // TSİ
   const [end, setEnd] = useState<string>('')
 
   // UI durumları
@@ -94,28 +95,44 @@ export default function FlightPlanner({ onCreated, className }: Props) {
   return (
     <div className={`plannerCard ${className ?? ''}`}>
       <form onSubmit={submit} className="plannerGrid">
-
         {/* Code */}
         <div>
           <span className="fieldTitle">Kod</span>
           <div className="inputWrap">
             <div className="inputIcon">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M4 7h16M4 12h10M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path
+                  d="M4 7h16M4 12h10M4 17h16"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
               </svg>
             </div>
-            <input
+
+            <select
               className="input"
               value={code}
-              onChange={e => setCode(e.target.value)}
-              placeholder="THY203"
+              onChange={(e) => setCode(e.target.value)}
               required
-              list="codeList"  // 🔗 dinamik + statik code önerileri
-            />
+            >
+              <option value="">Seç...</option>
+              {[...new Set([
+                ...codeOpts,
+                "THY101", "THY203", "THY401", "TK7001",
+                "PGT10", "PGT305", "XQ123", "XQ902",
+                "FTH501", "SXS3305", "HV6203"
+              ])].map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* Origin */}
+
+        {/* Kalkış (Origin) */}
         <div>
           <span className="fieldTitle">Kalkış</span>
           <div className="inputWrap">
@@ -124,18 +141,22 @@ export default function FlightPlanner({ onCreated, className }: Props) {
                 <path d="M12 22s7-8 7-12a7 7 0 10-14 0c0 4 7 12 7 12z" stroke="currentColor" strokeWidth="2" />
               </svg>
             </div>
-            <input
+            <select
               className="input"
               value={origin}
-              onChange={e => setOrigin(e.target.value)}
-              placeholder="IST"
-              list="originList" // 🔗 dinamik (varsa) + IATA birleşik öneri
+              onChange={(e) => setOrigin(e.target.value)}
               required
-            />
+            >
+              <option value="">Seç...</option>
+              {IATA.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-
-        {/* Destination */}
+        {/* Varış (Destination) */}
         <div>
           <span className="fieldTitle">Varış</span>
           <div className="inputWrap">
@@ -144,14 +165,19 @@ export default function FlightPlanner({ onCreated, className }: Props) {
                 <path d="M12 2v20M12 2l3 3M12 2L9 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </div>
-            <input
+            <select
               className="input"
               value={destination}
-              onChange={e => setDestination(e.target.value)}
-              placeholder="LHR"
-              list="destList"   // 🔗 dinamik (varsa) + IATA birleşik öneri
+              onChange={(e) => setDestination(e.target.value)}
               required
-            />
+            >
+              <option value="">Seç...</option>
+              {IATA.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -214,7 +240,7 @@ export default function FlightPlanner({ onCreated, className }: Props) {
       <datalist id="codeList">
         {[...new Set([
           ...codeOpts,
-          "THY101","THY203","THY401","TK7001","PGT10","PGT305","XQ123","XQ902","FTH501","SXS3305","HV6203"
+          "THY101", "THY203", "THY401", "TK7001", "PGT10", "PGT305", "XQ123", "XQ902", "FTH501", "SXS3305", "HV6203"
         ])].map(c => <option key={c} value={c} />)}
       </datalist>
 

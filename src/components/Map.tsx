@@ -50,7 +50,7 @@ function AutoFit({ points, disabled }: { points: [number, number][]; disabled: b
       map.invalidateSize()
       if (points.length >= 2) {
         const bounds = points as unknown as LatLngBoundsExpression
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6, animate: false })
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 8, animate: false })
       }
     }, 0)
   }, [map, points, disabled])
@@ -75,31 +75,6 @@ function InvalidateOnResize() {
   }, [map])
 
   return null
-}
-
-// Yukarıda yakınlaştırmak için + butonu
-function RecenterControl({ path, show }: { path: [number, number][], show: boolean }) {
-  const map = useMap()
-  if (!show || path.length < 2) return null
-  const fit = () => {
-    const bounds = path as unknown as LatLngBoundsExpression
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6, animate: true })
-  }
-  return (
-    <div className="leaflet-top leaflet-right" style={{ zIndex: 900 }}>
-      <div className="leaflet-control" style={{ background: '#fff', borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,.25)' }}>
-        <button
-          onClick={fit}
-          title="Uçağa odakla"
-          style={{ border: 'none', background: 'white', padding: 8, cursor: 'pointer', display: 'grid', placeItems: 'center', width: 34, height: 34 }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke="#111" strokeWidth="2.2" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  )
 }
 
 // Uçağa tıkladığında tek seferlik odak yaptığımız yer
@@ -178,7 +153,7 @@ export default function Map({
   }, [items])
 
   const initialCenter = useRef<LatLngExpression>([20, 0])
-  const initialZoom = useRef<number>(2)
+  const initialZoom = useRef<number>(4.5)
 
   const tile = mapStyle === 'dark' ? {
     url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
@@ -200,10 +175,19 @@ export default function Map({
   //harita
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0 }}>
-      <MapContainer key={`${theme}-${mapStyle}`} center={[20, 0]} zoom={2} style={{ width: '100%', height: '100%' }}>
+      <MapContainer
+        key={`${theme}-${mapStyle}`}
+        center={[20, 0]}
+        zoom={3.5}
+        minZoom={2.5}          // en uzak görünümü kilitle (ekranı doldursun)
+        zoomSnap={0.25}
+        zoomDelta={0.5}
+        style={{ width: '100%', height: '100%' }}
+        className="custom-map"
+      >
         <InvalidateOnResize />
         <InitialView center={initialCenter.current} zoom={initialZoom.current} />
-        <AutoFit points={allLatLngs} disabled={autoFitDisabled} />  {/* ekrandaki tüm uçak noktalarını kapsayacak şekilde kadrajlar */}
+        <AutoFit points={allLatLngs} disabled={autoFitDisabled} />
         <InteractionCatcher onFirstInteract={() => setUserLocked(true)} />
 
         <TileLayer key={theme} attribution={tile.attr} url={tile.url} />
@@ -249,47 +233,61 @@ export default function Map({
           //Haritanın ana çizim kısmı
           return (
             <div key={f.id}>
-              {doOneShotFocus && <OneShotFocus doFocus={true} path={curved.length ? curved : (lastLL ? [lastLL] : [])} />}  {/*Sadece o an yyakınlaştırma yapar /*/}
-              {isSelected && <RecenterControl path={curved} show={true} />}
+              {/* sadece yeni seçildiği anda 1 kere odakla (ana kopyaya) */}
+              {doOneShotFocus && <OneShotFocus doFocus={true} path={curved.length ? curved : (lastLL ? [lastLL] : [])} />}
 
-              {shouldDraw && (
-                <>
-                  <Polyline
-                    positions={curved}
-                    pathOptions={{ color, weight: 3, opacity: 0.95, dashArray: '8,10', lineCap: 'butt', lineJoin: 'round' }}
-                    eventHandlers={{ click: () => onSelect(f.id) }}
-                  />
-                  <CircleMarker center={curved[0] as any} radius={5} pathOptions={{ color: '#10b981', weight: 2 }} />
-                  <CircleMarker center={curved[curved.length - 1] as any} radius={5} pathOptions={{ color: '#ef4444', weight: 2 }} />
-                </>
-              )}
+              {/* kopya dünyalar için boylam kaydırmaları */}
+              {([-1800, -1440, -1080, -720, -360, 0, 360, 720, 1080, 1440, 1800] as const).map((shift) => {
+                const shiftedPath = path.map(([lat, lng]) => [lat, lng + shift]) as [number, number][];
+                const shiftedLast = [lastLL[0], lastLL[1] + shift] as [number, number];
 
-              <Marker
-                position={lastLL as any} //Uçağın son konumu
-                icon={makePlaneIcon(
-                  (last as any)?.heading ?? 0,
-                  cont, //kıtaya göre gövde
-                  theme,
-                  isSelected ? 25 : 22,  //uçak boyutu baştakı seçiliyken
-                  isSelected ? 1.3 : 1.2  //stroke kalınlığı
-                )}
-                eventHandlers={{ click: () => onSelect(f.id) }}  //tıkladığında uçuşu seçer
-              >
-                {/*Aynı kodlu ama farklı günlerdeki uçuşları ayırt etmek için küçük bir tarih etiketi */}
-                
-                <Tooltip direction="top" offset={[0, -8]}>
-                  <div>
-                    <b>{f.code}</b>
-                    <br />
-                    {f.origin} → {f.destination}
-                    <div style={{ opacity: .8, fontSize: 12 }}>
-                      {new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', month: '2-digit', day: '2-digit' })
-                        .format(new Date(f.startTimeUtc))}
-                    </div>
+                return (
+                  <div key={`${f.id}-${shift}`}>
+                    {shouldDraw && (
+                      <>
+                        <Polyline
+                          positions={shiftedPath}
+                          pathOptions={{
+                            color,
+                            weight: 2,
+                            opacity: 0.9,
+                            dashArray: '4 8',
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                          }}
+                          className="route-dash"
+                          eventHandlers={{ click: () => onSelect(f.id) }}
+                        />
+                        <CircleMarker center={shiftedPath[0] as any} radius={5} pathOptions={{ color: '#10b981', weight: 2 }} />
+                        <CircleMarker center={shiftedPath[shiftedPath.length - 1] as any} radius={5} pathOptions={{ color: '#ef4444', weight: 2 }} />
+                      </>
+                    )}
+
+                    <Marker
+                      position={shiftedLast as any}
+                      icon={makePlaneIcon(
+                        (last as any)?.heading ?? 0,
+                        cont,
+                        theme,
+                        isSelected ? 25 : 22,
+                        isSelected ? 1.3 : 1.2
+                      )}
+                      eventHandlers={{ click: () => onSelect(f.id) }}
+                    >
+                      <Tooltip direction="top" offset={[0, -8]}>
+                        <div>
+                          <b>{f.code}</b><br />
+                          {f.origin} → {f.destination}
+                          <div style={{ opacity: .8, fontSize: 12 }}>
+                            {new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', month: '2-digit', day: '2-digit' })
+                              .format(new Date(f.startTimeUtc))}
+                          </div>
+                        </div>
+                      </Tooltip>
+                    </Marker>
                   </div>
-                </Tooltip>
-
-              </Marker>
+                );
+              })}
             </div>
           )
         })}

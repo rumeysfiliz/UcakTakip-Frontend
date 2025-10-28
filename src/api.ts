@@ -39,35 +39,6 @@ export async function getRangePositions(ucusPlaniId: number, fromUtc: string, to
   return data
 }
 
-// Büyük aralıkları sayfalı okumak için 
- // /aralık endpoint'ini sayfa sayfa dolaşır, tüm sonuçları tek diziye toplar.
- // Neden gerekli? Bir uçuş saatlerce/günlerce kaydedildiğinde gerRangePosition da tek sayfayla istek almak hem yavaş hem de backend zaman aşımı olabilir
-export async function getTrailRangeAll(
-  ucusPlaniId: number,
-  fromUtc: string,   
-  toUtc: string,
-  pageSize = 1000,
-  onChunk?: (rows: UcakKonum[]) => void
-): Promise<UcakKonum[]> {
-  let page = 1;
-  const all: UcakKonum[] = [];
-  for (;;) {
-    const { data } = await api.get<UcakKonum[]>("/api/UcakKonumu/aralik", {
-      params: { ucusPlaniId, fromUtc, toUtc, page, pageSize }
-    });
-    if (!data || data.length === 0) break;
-    all.push(...data);
-    onChunk?.(data);
-    if (data.length < pageSize) break; // son sayfa
-    page++;
-  }
-  // zaman sırasına göre garanti edelim ki rota çizerken sapıtmasın.
-  all.sort((a,b)=> new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime());
-  return all;
-}
-// onChunk her sayfa geldiğinde UI'ya parça parça iletmek için. 
-
-
 // POST /api/UcusPlani
 // Yeni uçuş planı kaydetmek için.
 export async function postFlight(
@@ -77,6 +48,10 @@ export async function postFlight(
   return data;
 }
 
+//Tek konum kaydı(ör origini hemen gösteermelik basmak)
+export async function postPosition(body: Omit<UcakKonum, 'id'>) {
+  await api.post('/api/UcakKonumu', body)
+}
 // Oluşturulmuş UcusPlani bunu alıp listeye ekleriz ve UI anıonda güncellenir.
 /* Omit<...> Kullanımı : Frontend formu bu alanları göndermez.
   - id (sunucu oluşturur)

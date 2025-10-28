@@ -14,7 +14,7 @@
 .topbar::before{
   content: "";
   position: absolute; inset: 0;
-  background: rgba(50, 50, 49, 0.917);
+  background: rgba(50, 50, 49, 0.951);
   backdrop-filter: saturate(150%);
   -webkit-backdrop-filter: blur(10px) saturate(160%);
   box-shadow: 0 6px 24px rgba(130, 128, 121, 0.533);
@@ -28,9 +28,9 @@
   z-index: 1;                  /* ← metin, butonlar görünür */
 }
 
-.topbar--compact{ padding:.45rem .9rem; height:46px; }
+.topbar--compact{ padding:.5rem .9rem; height:46px; }
 .topbar__row{ display:flex; align-items:center; justify-content:space-between; min-height:48px; gap:.6rem; }
-.topbar__left, .topbar__right{ display:flex; align-items:center; gap:.6rem; }
+.topbar__left, .topbar__right{ display:flex; align-items:center; gap:.9rem; }
 
 /* Bar “katı” görünmesin diye kontrolleri de hafif şeffaf bırak */
 .topbar .btn{
@@ -552,9 +552,9 @@
   padding: 0;
 }
 .iconBtn--round:hover { filter: brightness(1.08); }
-.btn--sm { height: 34px; padding: .35rem .7rem; border-radius: .55rem; }
+.btn--sm { height: 34px; padding: .35rem .8rem; border-radius: .55rem; }
 
-.timeline__grid { display:grid; gap:.6rem; grid-template-columns: 1fr 1fr auto; }
+.timeline__grid { display:grid; gap:1.5rem; grid-template-columns: 0.6fr 0.6fr auto; }
 @media (max-width: 900px){ .timeline__grid{ grid-template-columns: 1fr; } }
 
 .timeline__status {
@@ -638,7 +638,7 @@ select.btn option {
 /* === Select menüler için koyu tema fix (global) === */
 select {
   background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: px solid rgba(255, 255, 255, 0.25);
   color: #fff;
   border-radius: .55rem;
 }
@@ -648,3 +648,34 @@ select option {
   background: #1e1e1e;
   color: #fff;
 }
+/* Dash’lerin zoom’da kalınlığı sabit kalsın → yan kayma azalır */
+.route-dash{
+  vector-effect: non-scaling-stroke;
+  shape-rendering: geometricPrecision; /* sub-pixel titremeyi azaltır */
+}
+/* Zoom kontrolünü alta taşı */
+/* Zoom kontrolünü alta taşı ve küçült */
+.custom-map .leaflet-control-zoom {
+  top: auto !important;
+  bottom: -50px !important; /* zaman çizgisiyle çakışmasın */
+  right: 10px !important;
+  z-index: 450;
+}
+
+/* Zoom butonlarını küçült */
+.custom-map .leaflet-control-zoom a {
+  width: 26px !important;
+  height: 26px !important;
+  line-height: 26px !important;
+  font-size: 16px !important;
+  background: rgba(66, 62, 62, 0.672) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.custom-map .leaflet-control-zoom a:hover {
+  background: rgba(24, 23, 23, 0.747) !important;
+}
+/* topbar.css veya global css */
+.leaflet-container { background: #1b1d20; }
+

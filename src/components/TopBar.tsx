@@ -12,10 +12,7 @@ type Props = {
   onStart: () => void;
   onStop: () => void;
 
-  
   onLoadAll?: () => void;
-  onLoadSelected?: () => void;
-  onClearTrails?: () => void;
   // kıta filtresi
   enabledContinents: Set<Continent>;
   onToggleContinent: (c: Continent) => void;
