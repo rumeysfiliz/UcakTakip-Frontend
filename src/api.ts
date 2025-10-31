@@ -10,12 +10,32 @@ const api = axios.create({ baseURL: import.meta.env.VITE_API_URL })
   Dağıtım → (ör. prod URL)
   Böylece adres değişiminde tek bir env yeter. */
 
-
-// Dashboard ilk açıldığında uçuş planlarını listelemek için kullandık.
 export async function getFlights(): Promise<UcusPlani[]> {
-  const { data } = await api.get<UcusPlani[]>('/api/UcusPlani')
-  return data
+  const res = await api.get("/UcusPlani")
+  return res.data
 }
+
+export async function postFlightCoords(body: {
+  code: string
+  startTimeUtc: string
+  endTimeUtc?: string | null
+  originLat: number
+  originLng: number
+  destinationLat: number
+  destinationLng: number
+}): Promise<UcusPlani> {
+  const res = await api.post("/api/UcusPlani", body)
+  return res.data
+}
+
+// örnek: ±1 gün liste
+export async function getFlightsByDateRange(utcStartIso: string, utcEndIso: string): Promise<UcusPlani[]> {
+  const res = await api.get("/UcusPlani/tarih", {
+    params: { start: utcStartIso, end: utcEndIso },
+  })
+  return res.data as UcusPlani[]
+}
+
 
 // GET /api/UcakKonumu/son-konum/{id}
 // Uçuşun son konumunu döndürüyor. 

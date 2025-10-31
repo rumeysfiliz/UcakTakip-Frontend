@@ -10,6 +10,8 @@ import type { Continent } from '../lib/continents'
 import { flightContinentFrom } from '../lib/continents'
 import FlightInfoCard from "../components/FlightInfoCard"
 import { iataToLatLng } from '../lib/airports'
+import { getFlightsByDateRange } from "../api"
+
 
 /* =========================
    TSİ sadece GÖRÜNÜM için (input/etiket)

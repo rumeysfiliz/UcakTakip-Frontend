@@ -1,256 +1,164 @@
-import { useState, useEffect } from 'react'
-import type { UcusPlani } from '../types'
-import { postFlight, getFlights } from '../api'
+// src/components/FlightPlanner.tsx
+import { useState } from "react"
+import type { UcusPlani } from "../types"
+import { postFlightCoords } from "../api"
+import { iataToLatLng, iataNearest } from "../lib/airports" // IST -> [lat, lng] | null
 
 type Props = { onCreated?: (f: UcusPlani) => void; className?: string }
-// onCreated: Yeni uçuş eklendiğinde üst bileşene haber ver
-// className: Dışarıdan özel CSS sınıfı eklemek için
 
-
-const IATA = [
-  "IST", "SAW", "ESB", "ADB", "AYT", "AMS", "BER", "FRA", "CDG", "LHR", "LGW", "FCO", "MXP", "ATH",
-  "ZRH", "BCN", "MAD", "LIS", "BRU", "VIE", "PRG", "BUD", "WAW", "OSL", "CPH", "HEL", "DUB", "ARN",
-  "JFK", "LAX", "ORD", "ATL", "DFW", "MIA", "YYZ", "YVR", "MEX", "DXB", "DOH", "RUH", "JED",
-  "DEL", "BOM", "SIN", "KUL", "BKK", "HKG", "ICN", "NRT", "HND", "PEK", "PVG", "TPE", "SYD", "MEL", "AKL",
-  "GRU", "EZE", "SCL", "LIM", "BOG", "CPT", "JNB", "ADD", "NBO", "CMN", "LOS"
-];
-
-/** datetime-local için (yerel TZ’de) YYYY-MM-DDTHH:mm üretir */
-function localIsoMinute(d = new Date()) {
-  const off = d.getTimezoneOffset();               // dk
-  const fixed = new Date(d.getTime() - off * 60000);
-  return fixed.toISOString().slice(0, 16);         // saniyesiz
-}
-
-/** Backend UTC veri istiyor o yüzden çeviriyo */
-function toUtcIso(localStr: string) {
-  return new Date(localStr).toISOString();
+// datetime-local (TSİ) -> backend'e UTC ISO
+function toUtcIso(local: string) {
+  // local "YYYY-MM-DDTHH:mm" formatında gelmeli
+  return new Date(local).toISOString()
 }
 
 export default function FlightPlanner({ onCreated, className }: Props) {
-  // Form değerleri
-  const [code, setCode] = useState('THY203')
-  const [origin, setOrigin] = useState('IST')         // Kalkış
-  const [destination, setDestination] = useState('LHR') // Varış
-  const [start, setStart] = useState(localIsoMinute()) // TSİ
-  const [end, setEnd] = useState<string>('')
+  // Form alanları
+  const [code, setCode] = useState("")
+  const [originIata, setOriginIata] = useState("")
+  const [destIata, setDestIata] = useState("")
+  const [startLocal, setStartLocal] = useState("") // <input type="datetime-local">
+  const [endLocal, setEndLocal] = useState("")
 
-  // UI durumları
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
+  // Durum
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
 
-  // Öneriler çıkması için
-  const [codeOpts, setCodeOpts] = useState<string[]>([])
-  const [originOpts, setOriginOpts] = useState<string[]>([])
-  const [destOpts, setDestOpts] = useState<string[]>([])
-
-  // İlk yüklemede mevcut planlardan benzersiz code/origin/destination önerilerini çek
-  useEffect(() => {
-    (async () => {
-      try {
-        const list = await getFlights()
-        const uniq = <T extends string>(arr: T[]) => Array.from(new Set(arr.filter(Boolean))).sort()
-        setCodeOpts(uniq(list.map(f => f.code)))
-        setOriginOpts(uniq(list.map(f => f.origin)))
-        setDestOpts(uniq(list.map(f => f.destination)))
-      } catch (e) {
-        // Öneri gelmese de form çalışır; sessiz geç
-        console.warn('Öneriler alınamadı:', e)
-      }
-    })()
-  }, [])
-
-  // Gönder
-  async function submit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setBusy(true); setErr(null); setOk(null)
+    setError(null); setOk(null)
 
-    // Basit validasyonlar
-    if (origin.trim().toUpperCase() === destination.trim().toUpperCase()) {
-      setBusy(false)
-      setErr('Kalkış ve varış aynı olamaz.')
-      return
-    }
+    // Basit zorunlular
+    const c = code.trim().toUpperCase()
+    const o = originIata.trim().toUpperCase()
+    const d = destIata.trim().toUpperCase()
+    if (!c) return setError("Uçuş kodu zorunlu.")
+    if (!o) return setError("Kalkış IATA zorunlu (örn. IST).")
+    if (!d) return setError("Varış IATA zorunlu (örn. FRA).")
+    if (!startLocal) return setError("Başlangıç zamanı zorunlu.")
+    if (o === d) return setError("Kalkış ve varış aynı olamaz.")
 
+    // IATA -> koordinat çevir
+    const oPair = iataToLatLng(o)
+    if (!oPair) return setError("Kalkış IATA geçersiz (ör. IST).")
+    const dPair = iataToLatLng(d)
+    if (!dPair) return setError("Varış IATA geçersiz (ör. FRA).")
+
+    const [oLat, oLng] = oPair
+    const [dLat, dLng] = dPair
+
+    setSaving(true)
     try {
-      const body = {
-        code: code.trim().toUpperCase(),
-        origin: origin.trim().toUpperCase(),
-        destination: destination.trim().toUpperCase(),
-        startTimeUtc: toUtcIso(start),
-        endTimeUtc: end ? toUtcIso(end) : null,
-      } as Omit<UcusPlani, 'id' | 'createdAtUtc' | 'ucakKonumlari'>
-
-      const created = await postFlight(body)
+      const created = await postFlightCoords({
+        code: c,
+        startTimeUtc: toUtcIso(startLocal),
+        endTimeUtc: endLocal ? toUtcIso(endLocal) : null,
+        originLat: oLat,
+        originLng: oLng,
+        destinationLat: dLat,
+        destinationLng: dLng,
+      })
       onCreated?.(created)
-      setOk(`Planlandı (#${created.id})`)
-    } catch (e: any) {
-      setErr(e?.message ?? 'Kayıt başarısız')
+      setOk(`${created.code} oluşturuldu (#${created.id}).`)
+
+      // Formu temizle
+      setCode("")
+      setOriginIata("")
+      setDestIata("")
+      setStartLocal("")
+      setEndLocal("")
+    } catch (err: any) {
+      const r = err?.response
+      let msg = err?.message || "Kaydetme sırasında bir hata oluştu."
+      if (r) {
+        if (typeof r.data === "string" && r.data.trim()) msg = r.data
+        else if (r.data?.mesaj) msg = r.data.mesaj
+        else if (r.data?.message) msg = r.data.message
+        else try { msg = JSON.stringify(r.data) } catch {}
+        msg = `(${r.status}) ${msg}`
+      }
+      setError(msg)
     } finally {
-      setBusy(false)
+      setSaving(false)
     }
   }
 
   return (
-    <div className={`plannerCard ${className ?? ''}`}>
-      <form onSubmit={submit} className="plannerGrid">
-        {/* Code */}
+    <form onSubmit={handleSubmit} className={className}>
+      <div style={{ display: "grid", gap: 12, maxWidth: 520 }}>
+        {/* 1) Uçuş Kodu */}
         <div>
-          <span className="fieldTitle">Kod</span>
-          <div className="inputWrap">
-            <div className="inputIcon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M4 7h16M4 12h10M4 17h16"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
-
-            <select
-              className="input"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-            >
-              <option value="">Seç...</option>
-              {[...new Set([
-                ...codeOpts,
-                "THY101", "THY203", "THY401", "TK7001",
-                "PGT10", "PGT305", "XQ123", "XQ902",
-                "FTH501", "SXS3305", "HV6203"
-              ])].map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
+          <span className="fieldTitle">Uçuş Kodu</span>
+          <input
+            className="input"
+            placeholder="THY203"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            required
+          />
         </div>
 
-
-        {/* Kalkış (Origin) */}
+        {/* 2) Kalkış IATA */}
         <div>
-          <span className="fieldTitle">Kalkış</span>
-          <div className="inputWrap">
-            <div className="inputIcon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M12 22s7-8 7-12a7 7 0 10-14 0c0 4 7 12 7 12z" stroke="currentColor" strokeWidth="2" />
-              </svg>
-            </div>
-            <select
-              className="input"
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
-              required
-            >
-              <option value="">Seç...</option>
-              {IATA.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
+          <span className="fieldTitle">Kalkış Havalimanı (IATA)</span>
+          <input
+            className="input"
+            placeholder="IST"
+            value={originIata}
+            onChange={(e) => setOriginIata(e.target.value)}
+            maxLength={4}
+            required
+          />
         </div>
-        {/* Varış (Destination) */}
+
+        {/* 3) Varış IATA */}
         <div>
-          <span className="fieldTitle">Varış</span>
-          <div className="inputWrap">
-            <div className="inputIcon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2v20M12 2l3 3M12 2L9 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
-            <select
-              className="input"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              required
-            >
-              <option value="">Seç...</option>
-              {IATA.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
+          <span className="fieldTitle">Varış Havalimanı (IATA)</span>
+          <input
+            className="input"
+            placeholder="FRA"
+            value={destIata}
+            onChange={(e) => setDestIata(e.target.value)}
+            maxLength={4}
+            required
+          />
         </div>
 
-        {/* Start — TSİ */}
+        {/* 4) Başlangıç (TSİ) */}
         <div>
-          <span className="fieldTitle">Başlangıç</span>
-          <div className="inputWrap">
-            <div className="inputIcon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M7 3v3M17 3v3M4 8h16M5 11h4M11 11h4M5 15h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
-            <input
-              type="datetime-local"
-              className="input"
-              value={start}
-              onChange={e => setStart(e.target.value)}
-              required
-            />
-          </div>
+          <span className="fieldTitle">Başlangıç (TSİ)</span>
+          <input
+            className="input"
+            type="datetime-local"
+            value={startLocal}
+            onChange={(e) => setStartLocal(e.target.value)}
+            required
+          />
         </div>
 
-        {/* End — TSİ */}
+        {/* 5) Bitiş (TSİ) */}
         <div>
-          <span className="fieldTitle">Bitiş</span>
-          <div className="inputWrap">
-            <div className="inputIcon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M7 3v3M17 3v3M4 8h16M8 14h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
-            <input
-              type="datetime-local"
-              className="input"
-              value={end}
-              onChange={e => setEnd(e.target.value)}
-            />
-          </div>
+          <span className="fieldTitle">Bitiş (TSİ) (opsiyonel)</span>
+          <input
+            className="input"
+            type="datetime-local"
+            value={endLocal}
+            onChange={(e) => setEndLocal(e.target.value)}
+          />
         </div>
 
-        {/* Planla butonu */}
-        <div className="plannerSticky">
-          <div className="plannerRow" style={{ justifyContent: 'flex-end' }}>
-            {ok && <span className="statusText statusText--ok">{ok}</span>}
-            {err && <span className="statusText statusText--err">{err}</span>}
-            <button type="submit" disabled={busy} className="btn btn--primarySolid">
-              {busy ? 'Kaydediliyor…' : 'Uçuşu Planla'}
-            </button>
-          </div>
+        {/* Durum mesajları */}
+        {error && <div style={{ color: "#d33" }}>{error}</div>}
+        {ok && <div style={{ color: "#3c9" }}>{ok}</div>}
+
+        {/* Gönder */}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="submit" className="btn btn--primary" disabled={saving}>
+            {saving ? "Kaydediliyor..." : "Uçuşu Oluştur"}
+          </button>
         </div>
-      </form>
-
-      {/* === Datalist'ler === */}
-      {/* Statik IATA (yedek) */}
-      <datalist id="iataList">
-        {IATA.map(code => <option key={code} value={code} />)}
-      </datalist>
-
-      {/* Code için: önce dinamik, sonra statik örnek kodlar */}
-      <datalist id="codeList">
-        {[...new Set([
-          ...codeOpts,
-          "THY101", "THY203", "THY401", "TK7001", "PGT10", "PGT305", "XQ123", "XQ902", "FTH501", "SXS3305", "HV6203"
-        ])].map(c => <option key={c} value={c} />)}
-      </datalist>
-
-      {/* Origin/Destination için: dinamik + IATA birleşik */}
-      <datalist id="originList">
-        {[...new Set([...originOpts, ...IATA])].map(c => <option key={c} value={c} />)}
-      </datalist>
-      <datalist id="destList">
-        {[...new Set([...destOpts, ...IATA])].map(c => <option key={c} value={c} />)}
-      </datalist>
-    </div>
+      </div>
+    </form>
   )
 }

@@ -1,6 +1,8 @@
 import React from "react"
 import type { UcusPlani, UcakKonum } from "../types"
 import { fmtTurkeyTime, toTurkeyTime } from "../lib/time"
+import { iataNearest } from "../lib/airports"
+
 
 type Props = {
   flight: UcusPlani
@@ -54,6 +56,20 @@ export default function FlightInfoCard({
         "#3b82f6"
   //Üst bar/filtre/planlayıcı açıkken kartın sağa kaymasını sağlıyor. (Çakışma oluyordu )
   const rightGap = typeof offsetRightPx === "number" ? offsetRightPx : 12
+  // flight: UcusPlani
+  const originLabel =
+    (flight.origin?.trim() || null) ??
+    ((typeof flight.originLat === "number" && typeof flight.originLng === "number")
+      ? (iataNearest(flight.originLat, flight.originLng)?.code ?? null)
+      : null) ??
+    "Bilinmiyor";
+
+  const destLabel =
+    (flight.destination?.trim() || null) ??
+    ((typeof flight.destinationLat === "number" && typeof flight.destinationLng === "number")
+      ? (iataNearest(flight.destinationLat, flight.destinationLng)?.code ?? null)
+      : null) ??
+    "Bilinmiyor";
 
   //Kart ayarları/düzenlemeleri/hareketleri
   return (
@@ -83,8 +99,7 @@ export default function FlightInfoCard({
 
       {/* Başlık. Uçuş kodu - Başlangıç - Bitiş */}
       <div style={{ fontWeight: 800, letterSpacing: 0.2, fontSize: 18, marginRight: 38, marginBottom: 8 }}>
-        {flight.code} — {flight.origin} → {flight.destination}
-      </div>
+        {flight.code} — {originLabel} → {destLabel}      </div>
 
       {/* Orta blok. Kalkış - ikon - varış */}
       <div

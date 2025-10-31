@@ -92,6 +92,36 @@ export const airports: Record<string, [number, number]> = {
   NBO: [-1.319, 36.927],   // Nairobi
 };
 
+export function iataNearest(lat: number, lng: number) {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  let best: null | { code: string; km: number } = null;
+
+  // airports bir nesne: { "IST": [lat,lng], ... }
+  for (const [code, coords] of Object.entries(airports)) {
+    const [aLat, aLng] = coords as [number, number];
+    const dLat = toRad(aLat - lat);
+    const dLng = toRad(aLng - lng);
+    const s1 = Math.sin(dLat / 2);
+    const s2 = Math.sin(dLng / 2);
+    const c =
+      2 *
+      Math.asin(
+        Math.sqrt(
+          s1 * s1 +
+            Math.cos(toRad(lat)) *
+              Math.cos(toRad(aLat)) *
+              s2 * s2
+        )
+      );
+    const km = R * c;
+    if (!best || km < best.km) best = { code, km };
+  }
+
+  return best && best.km < 50 ? best : null; // 50 km içinde bir havalimanı varsa döndür
+}
+
+
 export function iataToLatLng(code?: string): [number, number] | null {
   if (!code) return null;
   const c = code.trim().toUpperCase();

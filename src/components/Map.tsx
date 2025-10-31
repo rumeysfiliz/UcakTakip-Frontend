@@ -127,7 +127,7 @@ export default function Map({
   const stadiaKey = import.meta.env.VITE_STADIA_KEY as string | undefined
 
   // önceki seçimi hatırla tek seçim şeyi bir dah zıplama
-  const prevSelectedRef = useRef<number | null>(null)
+  const prevSelectedRef = useRef<number | null>(null)  
   const justSelectedId = selectedId !== null && prevSelectedRef.current !== selectedId ? selectedId : null
   useEffect(() => { prevSelectedRef.current = selectedId }, [selectedId])
 
