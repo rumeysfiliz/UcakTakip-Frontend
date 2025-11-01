@@ -1,5 +1,5 @@
 // src/pages/Dashboard.tsx
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useMemo, useState } from 'react'
 import Map from '../components/Map'
 import type { UcusPlani, UcakKonum } from '../types'
 import { getFlights, getLastPosition, getRangePositions, postPosition } from '../api'
@@ -10,6 +10,7 @@ import type { Continent } from '../lib/continents'
 import { flightContinentFrom } from '../lib/continents'
 import FlightInfoCard from "../components/FlightInfoCard"
 import { iataToLatLng } from '../lib/airports'
+import FlightListPanel from "../components/FlightListPanel";
 import { getFlightsByDateRange } from "../api"
 
 
@@ -93,6 +94,12 @@ export default function Dashboard() {
   const playTimerRef = useRef<number | null>(null)
   const [playSpeed, setPlaySpeed] = useState<0.5 | 1 | 2 | 4>(1)
 
+  // Takip
+  const [isTracking, setIsTracking] = useState(false)
+  const [refreshMs, setRefreshMs] = useState<number>(3000)
+  const timerRef = useRef<number | null>(null)
+  const [refreshSec, setRefreshSec] = useState<number>(refreshMs / 1000)
+  useEffect(() => { setRefreshMs(refreshSec * 1000) }, [refreshSec])
   // 🔴 CANLI referans zamanı: **her zaman UTC şimdi** (backend ile birebir)
   const [nowIso, setNowIso] = useState<string>(new Date().toISOString());
   useEffect(() => {
@@ -100,25 +107,47 @@ export default function Dashboard() {
     const id = window.setInterval(() => setNowIso(new Date().toISOString()), 1000);
     return () => window.clearInterval(id);
   }, [mode]);
+  // 🔵 Canlı modda seçili uçuşun son konumunu sürekli çek
+  // Seçili uçuş için canlı polling (refreshSec'e göre)
+  useEffect(() => {
+    if (mode !== "live" || !selectedId) return;
+    const iv = window.setInterval(async () => {
+      try {
+        const p = await getLastPosition(selectedId);
+        if (p) setLastPositions(prev => ({ ...prev, [selectedId]: p }));
+      } catch (err) {
+        console.error("live polling error", err);
+      }
+    }, refreshSec * 1000); // ← tüm seçenekleri destekler
 
-  // Takip
-  const [isTracking, setIsTracking] = useState(false)
-  const [refreshMs, setRefreshMs] = useState<number>(3000)
-  const timerRef = useRef<number | null>(null)
-  const [refreshSec, setRefreshSec] = useState<number>(refreshMs / 1000)
-  useEffect(() => { setRefreshMs(refreshSec * 1000) }, [refreshSec])
+    return () => window.clearInterval(iv);
+  }, [mode, selectedId, refreshSec]);
+
+
 
   // Çekmeceler
-  const [filterOpen, setFilterOpen] = useState(false)
-  const [plannerOpen, setPlannerOpen] = useState(false)
-  const [panelW, setPanelW] = useState(() => Math.min(460, Math.round(window.innerWidth * 0.92)))
-  useEffect(() => {
-    const onResize = () => setPanelW(Math.min(460, Math.round(window.innerWidth * 0.92)))
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-  const cardOffset = (plannerOpen || filterOpen) ? panelW + 12 : 12
+  // Dashboard component FONKSİYONUNUN İÇİNDE (en üstlerde) :
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [plannerOpen, setPlannerOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
 
+  // Açık çekmece genişliği (px) — hook'lar koşulsuz ve component gövdesinde.
+  const [drawerW, setDrawerW] = useState(0);
+  useEffect(() => {
+    const remeasure = () => {
+      // Mobilde kart alttan geldiği için offset 0
+      if (window.matchMedia("(max-width: 640px)").matches) { setDrawerW(0); return; }
+      const el = document.querySelector<HTMLElement>(".drawerPanel.is-open");
+      setDrawerW(el ? el.offsetWidth : 0);
+    };
+    // ilk ölçüm + resize
+    remeasure();
+    window.addEventListener("resize", remeasure);
+    return () => window.removeEventListener("resize", remeasure);
+  }, [filterOpen, plannerOpen, listOpen]);
+
+  const anyDrawerOpen = filterOpen || plannerOpen || listOpen;
+  const cardOffset = anyDrawerOpen ? (drawerW + 12) : 12;
   // Kıta filtresi
   const ALL: Continent[] = ['Europe', 'Asia', 'NorthAmerica', 'SouthAmerica', 'Africa', 'Oceania', 'Antarctica', 'Other']
   const [enabledContinents, setEnabledContinents] = useState<Set<Continent>>(new Set(ALL))
@@ -175,61 +204,101 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       if (!selectedId) return
-      const end = (mode === 'live') ? new Date().toISOString() : toUtc
+      const end = (mode === 'live') ? new Date().toISOString() : displayTime //böylece zaman ilerledikeç değişşr
       const rows = await getRangePositions(selectedId, fromUtc, end)
       const ordered = (rows ?? []).slice().sort((a, b) => +new Date(a.timestampUtc) - +new Date(b.timestampUtc))
       setTrails(prev => ({ ...prev, [selectedId]: ordered }))
     })()
   }, [selectedId, fromUtc, toUtc, mode])
 
+  function ghostPositionFromPlan(f: UcusPlani, refIso: string): UcakKonum | null {
+    if (
+      f.originLat == null || f.originLng == null ||
+      f.destinationLat == null || f.destinationLng == null
+    ) return null
+
+    const tA = +new Date(f.startTimeUtc)
+    const tB = f.endTimeUtc ? +new Date(f.endTimeUtc) : (tA + 2 * 3600_000)
+    const ref = Math.min(Math.max(+new Date(refIso), tA), tB)
+    const r = tB > tA ? (ref - tA) / (tB - tA) : 0
+
+    const lat = f.originLat + (f.destinationLat - f.originLat) * r
+    const lng = f.originLng + (f.destinationLng - f.originLng) * r
+
+    return {
+      id: 0,
+      ucusPlaniId: f.id,
+      timestampUtc: new Date(ref).toISOString(),
+      latitude: lat,
+      longitude: lng,
+      altitude: 0,
+      heading: 0
+    }
+  }
+
+
   /* =========================
      Görünüm kümeleri (UTC referans)
      ========================= */
+
+  //IATA yok; plan koordinatlarıyla ghost
   const displayTrails = Object.fromEntries(
     flights.map(f => {
-      const refIso = (mode === 'replay') ? displayTime : nowIso
-      const arr = (trails[f.id] ?? []).slice()
-      if (arr.length > 0) {
-        const filtered = arr.filter(p => +new Date(p.timestampUtc) <= +new Date(refIso))
-        return [f.id, filtered]
-      }
-      // Trail yoksa — hayalet çizgi (origin → refIso)
-      const fromLL = iataToLatLng(f.origin)
-      const toLL = iataToLatLng(f.destination)
-      if (!fromLL || !toLL) return [f.id, []]
-      const tA = +new Date(f.startTimeUtc)
-      const tB = f.endTimeUtc ? +new Date(f.endTimeUtc) : tA + 2 * 3600_000
-      const ref = Math.min(Math.max(+new Date(refIso), tA), tB)
-      const r = tB > tA ? (ref - tA) / (tB - tA) : 0
-      const midLat = fromLL[0] + (toLL[0] - fromLL[0]) * r
-      const midLng = fromLL[1] + (toLL[1] - fromLL[1]) * r
-      return [f.id, [
-        { id: 0, ucusPlaniId: f.id, timestampUtc: new Date(tA).toISOString(), latitude: fromLL[0], longitude: fromLL[1], altitude: 0, heading: 0 },
-        { id: 0, ucusPlaniId: f.id, timestampUtc: new Date(ref).toISOString(), latitude: midLat, longitude: midLng, altitude: 0, heading: 0 },
-      ]]
-    })
-  ) as Record<number, UcakKonum[]>
+      // 🔴 CANLI modda hiç ghost üretme:
+      if (mode !== 'replay') return [f.id, [] as UcakKonum[]];
 
-  const displayLastPositions: Record<number, UcakKonum | null> = Object.fromEntries(
-    flights.map(f => {
-      const refIso = (mode === 'replay') ? displayTime : nowIso
-      const ghost = (ref: string): UcakKonum | null => {
-        const fromLL = iataToLatLng(f.origin), toLL = iataToLatLng(f.destination)
-        if (!fromLL || !toLL) return null
-        const tA = +new Date(f.startTimeUtc), tB = f.endTimeUtc ? +new Date(f.endTimeUtc) : tA + 2 * 3600_000
-        const rRaw = tB > tA ? (+new Date(ref) - tA) / (tB - tA) : 0
-        const r = Math.max(0, Math.min(1, rRaw))
-        return {
-          id: 0, ucusPlaniId: f.id, timestampUtc: new Date(+new Date(ref)).toISOString(),
-          latitude: fromLL[0] + (toLL[0] - fromLL[0]) * r,
-          longitude: fromLL[1] + (toLL[1] - fromLL[1]) * r,
-          altitude: 0, heading: rhumbBearingDeg(fromLL[0], fromLL[1], toLL[0], toLL[1]),
-        }
+      const refIsoGhost = displayTime; // replay’de slider zamanı
+      const arr = (trails[f.id] ?? []).slice();
+
+      if (arr.length > 0) {
+        const filtered = arr.filter(p => +new Date(p.timestampUtc) <= +new Date(refIsoGhost));
+        return [f.id, filtered];
       }
-      const viaTrail = (trails[f.id]?.length ?? 0) > 0 ? interpAt(trails[f.id], refIso) : null
-      return [f.id, viaTrail ?? lastPositions[f.id] ?? ghost(refIso)]
+
+      // (yalnızca REPLAY için) plan-koordinat ghost
+      if (
+        f.originLat == null || f.originLng == null ||
+        f.destinationLat == null || f.destinationLng == null
+      ) return [f.id, []];
+
+      const tA = +new Date(f.startTimeUtc);
+      const tB = f.endTimeUtc ? +new Date(f.endTimeUtc) : tA + 2 * 3600_000;
+      const ref = Math.min(Math.max(+new Date(refIsoGhost), tA), tB);
+      const r = tB > tA ? (ref - tA) / (tB - tA) : 0;
+
+      const midLat = f.originLat + (f.destinationLat - f.originLat) * r;
+      const midLng = f.originLng + (f.destinationLng - f.originLng) * r;
+
+      return [f.id, [
+        { id: 0, ucusPlaniId: f.id, timestampUtc: new Date(tA).toISOString(), latitude: f.originLat, longitude: f.originLng, altitude: 0, heading: 0 },
+        { id: 0, ucusPlaniId: f.id, timestampUtc: new Date(ref).toISOString(), latitude: midLat, longitude: midLng, altitude: 0, heading: 0 },
+      ]];
     })
-  ) as Record<number, UcakKonum | null>
+  ) as Record<number, UcakKonum[]>;
+
+  //önce trail, sonra DB last, en sonda plan-koordinat ghost
+const displayLastPositions: Record<number, UcakKonum | null> = Object.fromEntries(
+  flights.map(f => {
+    const refIso = (mode === 'replay') ? displayTime : nowIso;
+
+    // 🔵 REPLAY: önce trail interp, yoksa plan-ghost
+    if (mode === 'replay') {
+      const hasTrail = (trails[f.id]?.length ?? 0) > 0;
+      if (hasTrail) {
+        const viaTrail = interpAt(trails[f.id], refIso);
+        return [f.id, viaTrail];
+      }
+      // trail yoksa slider anına göre plan-ghost
+      return [f.id, ghostPositionFromPlan(f, refIso)];
+    }
+
+    // 🔴 LIVE: sadece DB last (ghost yok)
+    if (lastPositions[f.id]) return [f.id, lastPositions[f.id]];
+    return [f.id, null];
+  })
+) as Record<number, UcakKonum | null>;
+
+
 
   /* =========================
      Aktif uçuş filtreleme (UTC referans)
@@ -240,11 +309,12 @@ export default function Dashboard() {
   const clampedDisplayMs = Math.min(Math.max(displayMs, minMs), maxMs)
   const refIso = (mode === 'replay') ? new Date(clampedDisplayMs).toISOString() : nowIso
 
+  const margin = 5 * 60_000; // ±5 dk
   const timeFilteredFlights = flights.filter(f => {
     const t = +new Date(refIso)
-    const start = +new Date(f.startTimeUtc)
+    const start = +new Date(f.startTimeUtc) - margin
     const end = f.endTimeUtc ? +new Date(f.endTimeUtc) : Number.POSITIVE_INFINITY
-    return t >= start && t <= end
+    return true
   })
 
   const visibleFlightIds = timeFilteredFlights
@@ -290,22 +360,27 @@ export default function Dashboard() {
         onLoadAll={loadHistoryForAll}
         enabledContinents={enabledContinents}
         onToggleContinent={toggleContinent}
-        planner={<FlightPlanner onCreated={async (f) => {
-          setFlights(prev => [...prev, f])
-          const from = iataToLatLng(f.origin)
-          const to = iataToLatLng(f.destination)
-          const head = (from && to) ? rhumbBearingDeg(from[0], from[1], to[0], to[1]) : 0
-          if (from) {
-            await postPosition({ ucusPlaniId: f.id, timestampUtc: f.startTimeUtc, latitude: from[0], longitude: from[1], altitude: 0, heading: head })
-          }
-          try {
-            const last = await getLastPosition(f.id)
-            if (last) setLastPositions(prev => ({ ...prev, [f.id]: last }))
-            const trailData = await getRangePositions(f.id, f.startTimeUtc, f.endTimeUtc ?? new Date().toISOString())
-            if (trailData?.length) setTrails(prev => ({ ...prev, [f.id]: trailData }))
-          } catch (err) { console.error(err) }
-          setSelectedId(f.id)
-        }} />}
+        listOpen={listOpen} setListOpen={setListOpen}
+        planner={
+          <FlightPlanner
+            onCreated={(f) => {
+              // 1) Listeye yeni planı ekle
+              setFlights((prev) => [...prev, f]);
+
+              // 2) Bu uçuşun canlı/trail durumunu sıfırla (sim gelene kadar boş)
+              setLastPositions((prev) => ({ ...prev, [f.id]: null }));
+              setTrails((prev) => ({ ...prev, [f.id]: [] }));
+
+              // 3) SADECE BİR KEZ ekranda görünmesi için seç
+              setSelectedId(f.id);
+
+              // 🚫 ÖNEMLİ: Burada artık konum YAZMIYORUZ.
+              // - postPosition YOK
+              // - getLastPosition/getRangePositions ile hemen fetch YOK
+              // Konum yazmak sadece simülatörün işi olacak.
+            }}
+          />
+        }
 
         mode={mode}
         setMode={(m) => { setMode(m); if (m === 'live') setDisplayTime(new Date().toISOString()) }}
@@ -330,9 +405,19 @@ export default function Dashboard() {
             disableAutoFit={isTracking}
             theme={theme}
             mapStyle={mapStyle}
+            mode={mode}
           />
         </div>
+        <FlightListPanel
+          open={listOpen}
+          onClose={() => setListOpen(false)}
+          flights={flights}
+          lastPositions={displayLastPositions}
+          mode={mode}
+          refIso={mode === "replay" ? displayTime : nowIso}
+          onSelect={(id) => { setSelectedId(id); setListOpen(false); }}
 
+        />
         {/* === ALT PANEL — TSİ görünüm === */}
         {timelineOpen ? (
           <div style={{ position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 520 }}>

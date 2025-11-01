@@ -5,13 +5,14 @@ import type { UcusPlani, UcakKonum } from './types' ////Dönen/verilen veriyi Ty
 //Her yere localhost yazmak yerine tek bir istemci oluşturmak.
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL })
 
+
 /* import.meta.env.VITE_API_URL: Vite’ın env mekanizması.
   Geliştirme → https://localhost:7229
   Dağıtım → (ör. prod URL)
   Böylece adres değişiminde tek bir env yeter. */
 
 export async function getFlights(): Promise<UcusPlani[]> {
-  const res = await api.get("/UcusPlani")
+  const res = await api.get("/api/UcusPlani")
   return res.data
 }
 
@@ -30,9 +31,8 @@ export async function postFlightCoords(body: {
 
 // örnek: ±1 gün liste
 export async function getFlightsByDateRange(utcStartIso: string, utcEndIso: string): Promise<UcusPlani[]> {
-  const res = await api.get("/UcusPlani/tarih", {
-    params: { start: utcStartIso, end: utcEndIso },
-  })
+  const res = await api.get("api/UcusPlani/tarih", {
+params: { baslangic: utcStartIso, bitis: utcEndIso, includePositions: false },  })
   return res.data as UcusPlani[]
 }
 

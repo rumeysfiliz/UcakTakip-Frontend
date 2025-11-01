@@ -2,7 +2,7 @@
 import { useState } from "react"
 import type { UcusPlani } from "../types"
 import { postFlightCoords } from "../api"
-import { iataToLatLng, iataNearest } from "../lib/airports" // IST -> [lat, lng] | null
+import { iataToLatLng, iataNearest, airports } from "../lib/airports" // IST -> [lat, lng] | null
 
 type Props = { onCreated?: (f: UcusPlani) => void; className?: string }
 
@@ -11,6 +11,8 @@ function toUtcIso(local: string) {
   // local "YYYY-MM-DDTHH:mm" formatında gelmeli
   return new Date(local).toISOString()
 }
+// IATA listesi: airports objesinin key'lerinden otomatik üret
+const IATA_LIST = Object.keys(airports).sort()
 
 export default function FlightPlanner({ onCreated, className }: Props) {
   // Form alanları
@@ -99,30 +101,50 @@ export default function FlightPlanner({ onCreated, className }: Props) {
           />
         </div>
 
-        {/* 2) Kalkış IATA */}
+     {/* 2) Kalkış IATA (SEÇİM) */}
         <div>
-          <span className="fieldTitle">Kalkış Havalimanı (IATA)</span>
-          <input
-            className="input"
-            placeholder="IST"
-            value={originIata}
-            onChange={(e) => setOriginIata(e.target.value)}
-            maxLength={4}
-            required
-          />
+          <span className="fieldTitle">Kalkış</span>
+          <div className="inputWrap">
+            <div className="inputIcon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M12 22s7-8 7-12a7 7 0 10-14 0c0 4 7 12 7 12z" stroke="currentColor" strokeWidth="2" />
+              </svg>
+            </div>
+            <select
+              className="input"
+              value={originIata}
+              onChange={(e) => setOriginIata(e.target.value)}
+              required
+            >
+              <option value="">Seç...</option>
+              {IATA_LIST.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* 3) Varış IATA */}
+        {/* 3) Varış IATA (SEÇİM) */}
         <div>
-          <span className="fieldTitle">Varış Havalimanı (IATA)</span>
-          <input
-            className="input"
-            placeholder="FRA"
-            value={destIata}
-            onChange={(e) => setDestIata(e.target.value)}
-            maxLength={4}
-            required
-          />
+          <span className="fieldTitle">Varış</span>
+          <div className="inputWrap">
+            <div className="inputIcon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2v20M12 2l3 3M12 2L9 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
+            <select
+              className="input"
+              value={destIata}
+              onChange={(e) => setDestIata(e.target.value)}
+              required
+            >
+              <option value="">Seç...</option>
+              {IATA_LIST.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* 4) Başlangıç (TSİ) */}

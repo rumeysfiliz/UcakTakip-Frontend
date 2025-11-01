@@ -5,6 +5,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { makePlaneIcon } from './AirPlaneIcon'
 import type { UcusPlani, UcakKonum } from '../types'
 import { colorFor, flightContinentFrom, type Continent, type ThemeMode } from '../lib/continents'
+// Map.tsx başına
+import { iataNearest } from '../lib/airports';
+
 
 /* ---------- helpers ---------- */
 
@@ -79,26 +82,40 @@ function InvalidateOnResize() {
 
 // Uçağa tıkladığında tek seferlik odak yaptığımız yer
 function OneShotFocus({ doFocus, path }: { doFocus: boolean; path: [number, number][] }) {
-  const map = useMap()
-  const ranRef = useRef(false)
+  const map = useMap();
+  const ranRef = useRef(false);
 
   useEffect(() => {
-    if (!map || !doFocus || ranRef.current) return //Uçak seçildiğinde doFocus devreye girer
-    ranRef.current = true //ranRef sayesinde işlem tekrar etmez
+    if (!map || !doFocus || ranRef.current) return;
+    ranRef.current = true;
 
-    if (path.length >= 2) {
-      const bounds = path as unknown as LatLngBoundsExpression
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6, animate: true })
-    } else if (path.length === 1) {
-      map.setView(path[0] as any, Math.max(map.getZoom(), 6), { animate: true })
+    // 1) Yinelenen noktaları temizle
+    const uniq: [number, number][] = [];
+    const same = (a: [number, number], b: [number, number]) =>
+      Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9;
+    for (const p of path) {
+      if (!uniq.length || !same(uniq[uniq.length - 1], p)) uniq.push(p);
     }
-    // küçük bir süre sonra flag’i sıfırla ki başka seçim olunca tekrar çalışabilsin
-    const t = setTimeout(() => { ranRef.current = false }, 300)
-    return () => clearTimeout(t)
-  }, [map, doFocus, JSON.stringify(path)])
 
-  return null
+    // 2) Haritayı önce güncelle
+    map.invalidateSize();
+
+    // 3) Eğer en az 2 farklı nokta varsa fitBounds, yoksa tek noktaya setView
+    if (uniq.length >= 2) {
+      const bounds = uniq as unknown as LatLngBoundsExpression;
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6, animate: true });
+    } else if (uniq.length === 1) {
+      map.setView(uniq[0] as any, Math.max(map.getZoom(), 7), { animate: true });
+    }
+
+    // 4) 300 ms sonra yeniden tetiklenebilir olsun
+    const t = setTimeout(() => { ranRef.current = false; }, 300);
+    return () => clearTimeout(t);
+  }, [map, doFocus, JSON.stringify(path)]);
+
+  return null;
 }
+
 
 /* ---------- component ---------- */
 
@@ -111,6 +128,7 @@ type Props = {
   disableAutoFit?: boolean   // Dashboard'tan: isTracking
   theme?: ThemeMode  // 'light' | 'darkSoft' | 'dark'
   mapStyle?: 'osmLight' | 'darkSoft' | 'dark' | 'satellite'
+  mode?: 'live' | 'replay'
 }
 
 export default function Map({
@@ -120,14 +138,25 @@ export default function Map({
   selectedId,
   onSelect,
   disableAutoFit = false,
-  theme = 'light', mapStyle = 'osmLight' }: Props) {
-
+  theme = 'light', mapStyle = 'osmLight',
+  mode = 'live',
+}: Props) {
+  // TSİ’de HH:mm göster
+  const fmtHM = (iso?: string | null) =>
+    iso
+      ? new Intl.DateTimeFormat("tr-TR", {
+        timeZone: "Europe/Istanbul",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(new Date(iso))
+      : "—";
   const [userLocked, setUserLocked] = useState(false)  //Haritayo ilk kez oynatıldı mı bilfgisi
   const autoFitDisabled = disableAutoFit || userLocked //haritayı elimize aldıysak oto true 
   const stadiaKey = import.meta.env.VITE_STADIA_KEY as string | undefined
 
   // önceki seçimi hatırla tek seçim şeyi bir dah zıplama
-  const prevSelectedRef = useRef<number | null>(null)  
+  const prevSelectedRef = useRef<number | null>(null)
   const justSelectedId = selectedId !== null && prevSelectedRef.current !== selectedId ? selectedId : null
   useEffect(() => { prevSelectedRef.current = selectedId }, [selectedId])
 
@@ -193,104 +222,218 @@ export default function Map({
         <TileLayer key={theme} attribution={tile.attr} url={tile.url} />
 
         {items.map(({ f, last, trail, cont }) => {
-          const lastLL = asLatLng(last)
-          if (!lastLL) return null
-
-          // 1) TRAIL + LAST → zaman sırasına göre tek listen -- iz geçmiş noktalar
-          const merged = [...trail, ...(last ? [last] : [])]
-            .filter(p => typeof (p as any).timestampUtc === 'string')
+          // 1) trail'den güvenli path üret (sadece ref’e kadar geldiği varsayımıyla)
+          const trailSorted = (trail ?? [])
+            .filter(p => typeof (p as any)?.timestampUtc === 'string')
             .sort((a, b) => new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime())
 
-          // Plan (start–end) dışında kalan noktaları at
-          const startMs = +new Date(f.startTimeUtc)
-          const endMs = f.endTimeUtc ? +new Date(f.endTimeUtc) : Number.POSITIVE_INFINITY
-          const mergedClamped = merged.filter(p => {
-            const t = +new Date(p.timestampUtc)
-            return t >= startMs && t <= endMs
-          })
-
-          // Ardışık yinelenen noktaları tekilleştirmek  aynı zaman veya aynı konum tekrarı var ise atlanır.
+          // yinelenen noktaları sadeleştir
           const uniq: UcakKonum[] = []
-          for (const p of mergedClamped) {
+          for (const p of trailSorted) {
             if (!uniq.length) { uniq.push(p); continue }
             const prev = uniq[uniq.length - 1]
-            const sameTime = Math.abs(+new Date(p.timestampUtc) - +new Date(prev.timestampUtc)) < 2000; // 2sn tolerans
-            const samePos = Math.abs(p.latitude - prev.latitude) < 1e-5 && Math.abs(p.longitude - prev.longitude) < 1e-5;
+            const sameTime = Math.abs(+new Date(p.timestampUtc) - +new Date(prev.timestampUtc)) < 2000
+            const samePos = Math.abs(p.latitude - prev.latitude) < 1e-5 && Math.abs(p.longitude - prev.longitude) < 1e-5
             if (sameTime && samePos) continue
             uniq.push(p)
           }
-          const path = uniq.map(p => asLatLng(p)).filter(Boolean) as [number, number][]
+
+          const path = uniq.map(p => [p.latitude, p.longitude] as [number, number])
+
           const color = colorFor(cont, theme)
           const isSelected = selectedId === f.id
-          const shouldDraw = isSelected && path.length > 1
 
-          // büyük-daire istersek:
-          const curved = path
+          // Replay modundaysa tüm uçakları çiz, Live modundaysa sadece seçiliyi
+          if (mode === "live" && !isSelected) return null
 
-          // sadece yeni seçildiği anda 1 kere odakla
+          // 🎯 Çizim koşulu: replay modundaysa tüm uçuşları çiz, live modundaysa sadece seçili
+          const shouldDraw =
+            isSelected &&
+            (
+              path.length > 0 ||
+              (typeof f.destinationLat === 'number' && typeof f.destinationLng === 'number')
+            )
+
+          // 🔥 Stil farkı: seçili uçuş kalın ve opak, diğerleri ince ve yarı saydam
+          const lineWeight = isSelected ? 3.5 : 2
+          const lineOpacity = isSelected ? 0.95 : 0.4
+          const dashOpacity = isSelected ? 0.85 : 0.3
+
+          // 2) plan uçları — IATA yok, doğrudan koordinatlar
+          const originLL: [number, number] | null =
+            (typeof f.originLat === 'number' && typeof f.originLng === 'number')
+              ? [f.originLat, f.originLng]
+              : (path[0] ?? null)
+
+          const destLL: [number, number] | null =
+            (typeof f.destinationLat === 'number' && typeof f.destinationLng === 'number')
+              ? [f.destinationLat, f.destinationLng]
+              : null
+          // IATA etiketlerini üret (metin varsa onu, yoksa koordinattan en yakın havalimanı)
+          const originLabel =
+            (f.origin?.trim() || null) ??
+            (originLL ? (iataNearest(originLL[0], originLL[1])?.code ?? "—") : "—");
+
+          const destLabel =
+            (f.destination?.trim() || null) ??
+            (destLL ? (iataNearest(destLL[0], destLL[1])?.code ?? "—") : "—");
+          // 3) ref noktası: trail varsa trail'in sonu; yoksa origin (replay başlangıcı gibi düşün)
+          const lastLL = asLatLng(last);
+          const refLL: [number, number] | null =
+            lastLL ?? (path.length ? path[path.length - 1] : originLL);
+
+          if (!refLL) return null
+
+          // 4) KAT EDİLEN: origin → ref (DÜZ)
+          let coveredPath: [number, number][] = path.slice();
+          if (!coveredPath.length) {
+            if (originLL && lastLL) coveredPath = [originLL, lastLL];
+            else if (originLL && refLL) coveredPath = [originLL, refLL];
+          }
+          // === YENİ: coveredPath aynı iki noktaysa tek noktaya indir ===
+          // 🔽 Bu kısmı path hesaplarının altına ekle (her uçuşun içinde)
+          const same = (a?: [number, number] | null, b?: [number, number] | null): boolean => {
+            if (!a || !b) return false;
+            return Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9;
+          };
+
+
+          // Odaklanırken kullanılacak güvenli path:
+          let focusPath: [number, number][];
+          if (coveredPath.length >= 2) {
+            const first = coveredPath[0], lastP = coveredPath[coveredPath.length - 1];
+            focusPath = (same(first, lastP) ? (refLL ? [refLL] : (originLL ? [originLL] : [])) : coveredPath);
+          } else {
+            focusPath = refLL ? [refLL] : (originLL ? [originLL] : []);
+          }
+
+          // 🔑 REFERANS anahtar: ref noktasının (yaklaşık) konumu + path uzunluğu
+          const focusKey =
+            `${refLL ? refLL.map(n => n.toFixed(3)).join(',') : 'nil'}|${focusPath.length}`;
+
+          // 5) KALAN: ref → destination (KESİK)
+          let remainingPath: [number, number][] = []
+          if (destLL) {
+            const needRemain = (Math.abs(destLL[0] - refLL[0]) > 1e-6) || (Math.abs(destLL[1] - refLL[1]) > 1e-6)
+            if (needRemain) remainingPath = [refLL, destLL]
+          }
+
+          // seçim anında bir defa odak
           const doOneShotFocus = justSelectedId === f.id
 
-          //Haritanın ana çizim kısmı
+          /* dünya kopyaları için boylam kaydırmaları */
+          const shifts: readonly number[] = isSelected ? ([-360, 0, 360] as const) : ([0] as const);
+
           return (
             <div key={f.id}>
-              {/* sadece yeni seçildiği anda 1 kere odakla (ana kopyaya) */}
-              {doOneShotFocus && <OneShotFocus doFocus={true} path={curved.length ? curved : (lastLL ? [lastLL] : [])} />}
+              {doOneShotFocus && (() => {
+                // === YENİ: coveredPath aynı iki noktaysa tek noktaya indir ===
+                const sameLL = (a: [number, number], b: [number, number]) =>
+                  Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9
 
-              {/* kopya dünyalar için boylam kaydırmaları */}
-              {([-1800, -1440, -1080, -720, -360, 0, 360, 720, 1080, 1440, 1800] as const).map((shift) => {
-                const shiftedPath = path.map(([lat, lng]) => [lat, lng + shift]) as [number, number][];
-                const shiftedLast = [lastLL[0], lastLL[1] + shift] as [number, number];
+                let focusPath: [number, number][]
+                if (coveredPath.length >= 2) {
+                  const first = coveredPath[0]
+                  const last = coveredPath[coveredPath.length - 1]
+                  focusPath = sameLL(first, last) ? [refLL] : coveredPath
+                } else {
+                  focusPath = [refLL]
+                }
+
+                return <OneShotFocus doFocus={true} path={focusPath} />
+              })()}
+
+
+
+              {shifts.map((shift) => {
+                const shiftLL = ([lat, lng]: [number, number]) => [lat, lng + shift] as [number, number];
+                const coveredShifted = coveredPath.map(shiftLL);
+                const remainingShifted = remainingPath.map(shiftLL);
+                const shiftedRef = shiftLL(refLL as [number, number]); // üstte zaten `if (!refLL) return null` var
 
                 return (
                   <div key={`${f.id}-${shift}`}>
-                    {shouldDraw && (
-                      <>
-                        <Polyline
-                          positions={shiftedPath}
-                          pathOptions={{
-                            color,
-                            weight: 2,
-                            opacity: 0.9,
-                            dashArray: '4 8',
-                            lineCap: 'round',
-                            lineJoin: 'round',
-                          }}
-                          className="route-dash"
-                          eventHandlers={{ click: () => onSelect(f.id) }}
-                        />
-                        <CircleMarker center={shiftedPath[0] as any} radius={5} pathOptions={{ color: '#10b981', weight: 2 }} />
-                        <CircleMarker center={shiftedPath[shiftedPath.length - 1] as any} radius={5} pathOptions={{ color: '#ef4444', weight: 2 }} />
-                      </>
+                    {/* KAT EDİLEN — DÜZ */}
+                    {shouldDraw && coveredShifted.length >= 2 && (
+                      <Polyline
+                        positions={coveredShifted}
+                        pathOptions={{ color, weight: lineWeight, opacity: lineOpacity, lineCap: 'round', lineJoin: 'round' }}
+                        eventHandlers={{ click: () => onSelect(f.id) }}
+                      />
                     )}
 
-                    <Marker
-                      position={shiftedLast as any}
-                      icon={makePlaneIcon(
-                        (last as any)?.heading ?? 0,
-                        cont,
-                        theme,
-                        isSelected ? 25 : 22,
-                        isSelected ? 1.3 : 1.2
-                      )}
-                      eventHandlers={{ click: () => onSelect(f.id) }}
-                    >
-                      <Tooltip direction="top" offset={[0, -8]}>
-                        <div>
-                          <b>{f.code}</b><br />
-                          {f.origin} → {f.destination}
-                          <div style={{ opacity: .8, fontSize: 12 }}>
-                            {new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', month: '2-digit', day: '2-digit' })
-                              .format(new Date(f.startTimeUtc))}
-                          </div>
-                        </div>
-                      </Tooltip>
-                    </Marker>
+                    {/* KALAN — KESİKLİ */}
+                    {shouldDraw && remainingShifted.length >= 2 && (
+                      <Polyline
+                        positions={remainingShifted}
+                        pathOptions={{ color, weight: lineWeight, opacity: dashOpacity, dashArray: '6 8', lineCap: 'round', lineJoin: 'round' }}
+                        className="route-dash"
+                        eventHandlers={{ click: () => onSelect(f.id) }}
+                      />
+                    )}
+                    {/* 🔵 Kalkış / 🔴 Varış çemberleri — sadece SEÇİLİ uçakta göster */}
+                    {isSelected && originLL && (
+                      <CircleMarker
+                        center={shiftLL(originLL) as any}
+                        radius={5}
+                        pathOptions={{
+                          color: '#065f46',         // koyu kenar
+                          weight: 2,
+                          opacity: 1,
+                          fillColor: '#10b9814f',     // yeşil (kalkış)
+                          fillOpacity: 0.95,
+                        }}
+                      >
+                        <Tooltip direction="bottom" offset={[0, 8]}>Kalkış</Tooltip>
+                      </CircleMarker>
+                    )}
+
+                    {isSelected && destLL && (
+                      <CircleMarker
+                        center={shiftLL(destLL) as any}
+                        radius={5}
+                        pathOptions={{
+                          color: '#7f1d1d',         // koyu kenar
+                          weight: 2,
+                          opacity: 1,
+                          fillColor: '#ef44447c',     // kırmızı (varış)
+                          fillOpacity: 0.85,
+                        }}
+                      >
+                        <Tooltip direction="bottom" offset={[0, 8]}>Varış</Tooltip>
+                      </CircleMarker>
+                    )}
+                    {/* ✈️ Replay'de herkes; Live'da sadece seçili */}
+                    {(mode === 'replay' || isSelected) && shiftedRef && (
+                      <Marker
+                        position={shiftedRef as any}
+                        opacity={isSelected ? 1 : 0.55}
+                        zIndexOffset={isSelected ? 1000 : 0}
+                        icon={makePlaneIcon((last as any)?.heading ?? 0, cont, theme, isSelected ? 25 : 18, isSelected ? 1.3 : 1)}
+                        eventHandlers={{ click: () => onSelect(f.id) }}
+                      >
+<Tooltip direction="top" offset={[0, -6]} className="tt-ghost">
+  <div className="tt-chip">
+    <div className="tt-code">{f.code}</div>
+    <div className="tt-route">{originLabel} → {destLabel}</div>
+    <div className="tt-time">{fmtHM(f.startTimeUtc)} – {fmtHM(f.endTimeUtc)}</div>
+  </div>
+</Tooltip>
+
+
+
+
+
+                      </Marker>
+                    )}
                   </div>
                 );
               })}
+
             </div>
           )
         })}
+
       </MapContainer>
     </div>
   )

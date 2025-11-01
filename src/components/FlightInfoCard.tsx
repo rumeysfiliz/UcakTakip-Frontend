@@ -117,7 +117,8 @@ export default function FlightInfoCard({
               minute: "2-digit",
               hour12: false,
             }).format(toTurkeyTime(flight.startTimeUtc))} TSİ
-          </div>          <div style={{ fontSize: 12, color: progressColor }}>{statusLabel}</div>
+          </div>          
+          <div style={{ fontSize: 12, color: progressColor }}>{statusLabel}</div>
         </div>
         {/* orta ikon (GIF, düzen sabit) */}
         <div aria-hidden style={{ opacity: .95, width: 86, height: 86, display: "grid", placeItems: "center" }}>

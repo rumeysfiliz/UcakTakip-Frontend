@@ -5,6 +5,7 @@ import { colorFor } from "../lib/continents"; //seçili tema+ kıtaya göre boya
 type Props = {
   fromUtc: string; setFromUtc: (v: string) => void;
   toUtc: string; setToUtc: (v: string) => void;
+  listOpen?: boolean; setListOpen?: (v: boolean) => void;
 
   // temel kontrol
   refreshSec: number; setRefreshSec: (v: number) => void;  //yenileme
@@ -33,7 +34,7 @@ type Props = {
   filterOpen?: boolean; setFilterOpen?: (v: boolean) => void;
   plannerOpen?: boolean; setPlannerOpen?: (v: boolean) => void;
 
-    // Kart başlığı vs. için opsiyoneller:
+  // Kart başlığı vs. için opsiyoneller:
   selectedId?: number | null;
   selectedCode?: string;
 };
@@ -54,9 +55,12 @@ export default function TopBar(p: Props) {
   const [internalPlannerOpen, _setInternalPlannerOpen] = useState(false);
   const plannerOpen = p.plannerOpen ?? internalPlannerOpen;
   const setPlannerOpen = p.setPlannerOpen ?? _setInternalPlannerOpen;
+  const [internalListOpen, _setInternalListOpen] = useState(false);
+  const listOpen = p.listOpen ?? internalListOpen;
+  const setListOpen = p.setListOpen ?? _setInternalListOpen
 
-  const anyOpen = filterOpen || plannerOpen;
-  const closeAll = () => { setFilterOpen(false); setPlannerOpen(false); };
+  const anyOpen = filterOpen || plannerOpen || listOpen;
+  const closeAll = () => { setFilterOpen(false); setPlannerOpen(false); setListOpen(false); };
 
 
   return (
@@ -96,15 +100,22 @@ export default function TopBar(p: Props) {
               </select>
             </label>
           </div>
-
+          
           <div className="topbar__right">
             <button
               type="button"
+              className="btn"
+              onClick={() => { setListOpen(true); setPlannerOpen(false); setFilterOpen(false); }}
+            >
+              Uçuş Listesi
+            </button>
+
+            <button
+              type="button"
               className="btn btn--ghost"
-              onClick={() => { setFilterOpen(!filterOpen); setPlannerOpen(false); }}
+              onClick={() => { setFilterOpen(!filterOpen); setPlannerOpen(false); setListOpen(false); }}
             >
               Filtreler
-
             </button>
           </div>
         </div>
