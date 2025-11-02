@@ -116,6 +116,26 @@ function OneShotFocus({ doFocus, path }: { doFocus: boolean; path: [number, numb
   return null;
 }
 
+// Ardışık noktaları "kısa yoldan" birleştir (unwrap)
+function unwrapPath(points: [number, number][]): [number, number][] {
+  if (points.length <= 1) return points.slice();
+  const out: [number, number][] = [points[0].slice() as any];
+  for (let i = 1; i < points.length; i++) {
+    const [plat, plng] = out[out.length - 1];
+    let [lat, lng] = points[i];
+    let d = lng - plng;
+    if (d > 180) lng -= 360;
+    else if (d < -180) lng += 360;
+    out.push([lat, lng]);
+  }
+  return out;
+}
+
+/**
+ * Tek dünya modunda ±180’de böl: unwrap’lı bir çizgiyi alır,
+ * görünür aralık dışına taşan kısımları “iki polyline” olarak döndürür.
+ */
+
 
 /* ---------- component ---------- */
 
@@ -141,6 +161,35 @@ export default function Map({
   theme = 'light', mapStyle = 'osmLight',
   mode = 'live',
 }: Props) {
+
+  const WORLD_BOUNDS: LatLngBoundsExpression = [[-85, -179.999], [85, 179.999]];
+  function ClampMinZoomToWorld() {
+    const map = useMap();
+    useEffect(() => {
+      const recalc = () => {
+        // Dünya, ekrana "içine sığacak" en uzak zoom
+        const z = map.getBoundsZoom(WORLD_BOUNDS, true);
+        map.setMinZoom(z);
+        if (map.getZoom() < z) map.setZoom(z, { animate: false });
+        // sınır sarkmasını da toparla
+        map.panInsideBounds(WORLD_BOUNDS, { animate: false });
+      };
+      recalc();
+      window.addEventListener('resize', recalc);
+      return () => window.removeEventListener('resize', recalc);
+    }, [map]);
+    return null;
+  }
+  // Zoom/move bittikten sonra görünümü sınır içine kilitle
+  function ClampToBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
+    const map = useMap();
+    useMapEvents({
+      zoomend() { map.panInsideBounds(bounds, { animate: false }); },
+      moveend() { map.panInsideBounds(bounds, { animate: false }); },
+    });
+    return null;
+  }
+
   // TSİ’de HH:mm göster
   const fmtHM = (iso?: string | null) =>
     iso
@@ -204,23 +253,40 @@ export default function Map({
   //harita
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0 }}>
+      {/* İSTEĞE BAĞLI: küre maskesi */}
+      <div className="globe-mask"></div>
+
       <MapContainer
         key={`${theme}-${mapStyle}`}
         center={[20, 0]}
         zoom={3.5}
-        minZoom={2.5}          // en uzak görünümü kilitle (ekranı doldursun)
+        /* minZoom'ı sabit verme; dinamik hesaplatacağız */
+        maxBounds={WORLD_BOUNDS}
+        maxBoundsViscosity={1.0}
+        worldCopyJump={false}
+        inertia={false}
+        zoomControl={false}
+        zoomDelta={0.25}
         zoomSnap={0.25}
-        zoomDelta={0.5}
-        style={{ width: '100%', height: '100%' }}
         className="custom-map"
+        style={{ width: '100%', height: '100%' }}
       >
         <InvalidateOnResize />
         <InitialView center={initialCenter.current} zoom={initialZoom.current} />
         <AutoFit points={allLatLngs} disabled={autoFitDisabled} />
         <InteractionCatcher onFirstInteract={() => setUserLocked(true)} />
+        {/* yeni: minZoom'u ekrana göre kilitle */}
+        <ClampMinZoomToWorld />
 
-        <TileLayer key={theme} attribution={tile.attr} url={tile.url} />
-
+        {/* sınır sarkmalarını daima içeri it */}
+        <ClampToBounds bounds={WORLD_BOUNDS} />
+        <TileLayer
+          key={theme}
+          attribution={tile.attr}
+          url={tile.url}
+          noWrap={true}
+          bounds={WORLD_BOUNDS}
+        />
         {items.map(({ f, last, trail, cont }) => {
           // 1) trail'den güvenli path üret (sadece ref’e kadar geldiği varsayımıyla)
           const trailSorted = (trail ?? [])
@@ -238,7 +304,9 @@ export default function Map({
             uniq.push(p)
           }
 
-          const path = uniq.map(p => [p.latitude, p.longitude] as [number, number])
+          // KISA YOL: trail’i unwrap et
+          const pathRaw = uniq.map(p => [p.latitude, p.longitude] as [number, number])
+          const path = unwrapPath(pathRaw)
 
           const color = colorFor(cont, theme)
           const isSelected = selectedId === f.id
@@ -284,11 +352,11 @@ export default function Map({
 
           if (!refLL) return null
 
-          // 4) KAT EDİLEN: origin → ref (DÜZ)
-          let coveredPath: [number, number][] = path.slice();
+          // KAT EDİLEN: origin → ref (KISA YOL)
+          let coveredPath: [number, number][] = path.slice()
           if (!coveredPath.length) {
-            if (originLL && lastLL) coveredPath = [originLL, lastLL];
-            else if (originLL && refLL) coveredPath = [originLL, refLL];
+            if (originLL && lastLL) coveredPath = unwrapPath([originLL, lastLL as [number, number]])
+            else if (originLL && refLL) coveredPath = unwrapPath([originLL, refLL as [number, number]])
           }
           // === YENİ: coveredPath aynı iki noktaysa tek noktaya indir ===
           // 🔽 Bu kısmı path hesaplarının altına ekle (her uçuşun içinde)
@@ -307,22 +375,22 @@ export default function Map({
             focusPath = refLL ? [refLL] : (originLL ? [originLL] : []);
           }
 
-          // 🔑 REFERANS anahtar: ref noktasının (yaklaşık) konumu + path uzunluğu
-          const focusKey =
-            `${refLL ? refLL.map(n => n.toFixed(3)).join(',') : 'nil'}|${focusPath.length}`;
 
-          // 5) KALAN: ref → destination (KESİK)
+
+          // KALAN: ref → dest (KISA YOL)
           let remainingPath: [number, number][] = []
-          if (destLL) {
+          if (destLL && refLL) {
             const needRemain = (Math.abs(destLL[0] - refLL[0]) > 1e-6) || (Math.abs(destLL[1] - refLL[1]) > 1e-6)
-            if (needRemain) remainingPath = [refLL, destLL]
+            if (needRemain) remainingPath = unwrapPath([refLL as [number, number], destLL])
           }
-
           // seçim anında bir defa odak
           const doOneShotFocus = justSelectedId === f.id
 
           /* dünya kopyaları için boylam kaydırmaları */
-          const shifts: readonly number[] = isSelected ? ([-360, 0, 360] as const) : ([0] as const);
+          const shifts: readonly number[] = [0] as const;
+          const normLng = (lng: number) => ((lng + 180) % 360 + 360) % 360 - 180;
+          // çizmeden önce: lng = normLng(lng)
+
 
           return (
             <div key={f.id}>
@@ -407,23 +475,18 @@ export default function Map({
                     {(mode === 'replay' || isSelected) && shiftedRef && (
                       <Marker
                         position={shiftedRef as any}
-                        opacity={isSelected ? 1 : 0.55}
+                        opacity={mode === "replay" ? 0.95 : isSelected ? 1 : 0.55}
                         zIndexOffset={isSelected ? 1000 : 0}
                         icon={makePlaneIcon((last as any)?.heading ?? 0, cont, theme, isSelected ? 25 : 18, isSelected ? 1.3 : 1)}
                         eventHandlers={{ click: () => onSelect(f.id) }}
                       >
-<Tooltip direction="top" offset={[0, -6]} className="tt-ghost">
-  <div className="tt-chip">
-    <div className="tt-code">{f.code}</div>
-    <div className="tt-route">{originLabel} → {destLabel}</div>
-    <div className="tt-time">{fmtHM(f.startTimeUtc)} – {fmtHM(f.endTimeUtc)}</div>
-  </div>
-</Tooltip>
-
-
-
-
-
+                        <Tooltip direction="top" offset={[0, -6]} className="tt-ghost">
+                          <div className="tt-chip">
+                            <div className="tt-code">{f.code}</div>
+                            <div className="tt-route">{originLabel} → {destLabel}</div>
+                            <div className="tt-time">{fmtHM(f.startTimeUtc)} – {fmtHM(f.endTimeUtc)}</div>
+                          </div>
+                        </Tooltip>
                       </Marker>
                     )}
                   </div>

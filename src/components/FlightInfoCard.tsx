@@ -10,6 +10,7 @@ type Props = {
   onClose: () => void  //Kapat tuşu
   offsetRightPx?: number //Sağda başka bir panel (TopBar çekmecesi, planner vs.) açıldığında kartın sağdan boşluğunu arttırıp çakışmayı engellemek için.
   selectedTimeUtc?: string | null // Replay modundaki slider zamanı; varsa kart “o ana” göre hesap yapıyor, yoksa “şimdi”yi kullanıyor.
+  
 }
 
 
@@ -54,8 +55,6 @@ export default function FlightInfoCard({
     statusLabel === "Tamamlandı" ? "#10b981" :
       statusLabel === "Planlandı" ? "rgba(255,255,255,.35)" :
         "#3b82f6"
-  //Üst bar/filtre/planlayıcı açıkken kartın sağa kaymasını sağlıyor. (Çakışma oluyordu )
-  const rightGap = typeof offsetRightPx === "number" ? offsetRightPx : 12
   // flight: UcusPlani
   const originLabel =
     (flight.origin?.trim() || null) ??
@@ -75,7 +74,7 @@ export default function FlightInfoCard({
   return (
     <aside
       style={{
-        position: "fixed", top: 60, right: rightGap, transition: "right .28s ease",
+        position: "fixed", top: 10, right: offsetRightPx ?? 12, transition: "right .28s ease",
         width: 360, maxWidth: "92vw", padding: 14, color: "#eef3f5",
         background: "rgba(18,28,26,.72)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
         border: "1px solid rgba(255,255,255,.14)", borderRadius: 16, boxShadow: "0 10px 30px rgba(0,0,0,.38)",

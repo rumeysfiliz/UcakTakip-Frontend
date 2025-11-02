@@ -161,7 +161,7 @@
   right: 0;
   height: 100vh;
   width: min(400px, 92vw);
-  background: rgba(15, 15, 15, 0.74);
+  background: rgba(10, 9, 9, 0.66);
   color: #fff;
   border-left: 1px solid rgba(255, 255, 255, 0.19);
   transform: translateX(100%);
@@ -170,6 +170,15 @@
   display: flex;
   flex-direction: column;
 }
+/* Sadece FLIGHT LIST arkaplanı */
+.drawerPanel.drawerPanel--list{
+  background: rgba(19, 19, 22, 0.855);    /* istediğin renk */
+  border-color: rgba(120,180,255,.28);  /* istersen kenar rengi */
+}
+
+/* başlık/gövdeyi de ayırmak istersen */
+.drawerPanel.drawerPanel--list .drawerHead{ background: transparent; }
+.drawerPanel.drawerPanel--list .drawerBody{ background: transparent; }
 
 .drawerPanel.is-open {
   transform: translateX(0);
@@ -210,10 +219,10 @@
 }
 
 .group {
-  padding: .6rem .7rem;
+   padding: .6rem .6rem;
   border: 1px solid rgba(255, 255, 255, .10);
   border-radius: .7rem;
-  background: rgba(255, 255, 255, .04);
+  background: rgba(254, 244, 244, 0);
 }
 
 .groupTitle {
@@ -624,13 +633,12 @@
 /* Timeline hız menüsü görünürlüğü fix */
 .btn.btn--sm select,
 select.btn,
-select.btn--sm {
+select {
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #f3e8e8;
+  color: #fff;
   border-radius: .55rem;
 }
-
 select.btn option {
   background: #1f1f1f; /* dropdown içi koyu zemin */
   color: #fff;          /* beyaz yazı */
@@ -638,7 +646,7 @@ select.btn option {
 /* === Select menüler için koyu tema fix (global) === */
 select {
   background: rgba(255, 255, 255, 0.12);
-  border: px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   color: #fff;
   border-radius: .55rem;
 }
@@ -715,3 +723,605 @@ select option {
 .tt-code{ font-weight: 700; font-size: 11.5px; letter-spacing: .2px; }
 .tt-route{ opacity: .9; font-weight: 400; }
 .tt-time { opacity: .75; font-weight: 300; font-size: 10px; }
+
+.globe-mask{
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  max-width: min(90vmin, 100%);
+  max-height: min(90vmin, 100%);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  overflow: hidden;             /* dairesel kesim */
+  box-shadow:
+    0 0 30px rgba(0,0,0,.35),
+    inset 0 -60px 120px rgba(0,0,0,.25); /* hafif küresel gölge */
+}
+
+
+/* === Bottom Dock === */
+.bottomDock{
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 10px;
+  z-index: 740; /* timeline (520) ve zoom (450) üstü */
+  display: flex;
+  gap: .9rem;
+  padding: .8rem .8rem;
+  background: rgba(14, 17, 25, 0.71);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.38);
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.dockBtn{
+  display: grid;
+  grid-template-rows: 26px auto;
+  align-items: center;
+  justify-items: center;
+  gap: .2rem;
+  min-width: 84px;
+  padding: .5rem .6rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: #eaf0f6;
+  font-weight: 700;
+  letter-spacing: .6px;
+  cursor: pointer;
+}
+.dockBtn:hover{ filter: brightness(1.06); }
+.dockBtn.is-disabled{ opacity:.45; cursor:not-allowed; }
+.dockIcon{ display:grid; place-items:center; }
+.dockLabel{ font-size: .74rem; opacity:.95; }
+
+/* küçük ekran: ikonlar kaymasın */
+@media (max-width: 720px){
+  .bottomDock{ bottom: 8px; gap: .4rem; padding: .4rem; overflow-x: auto; }
+  .dockBtn{ min-width: 74px; padding: .4rem .45rem; }
+}
+/* ===== Timeline (compact) ===== */
+.tlWrap{
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 99px;                         /* BottomDock'un üstünde */
+  width: min(700px, calc(100vw - 32px));
+  z-index: 740;
+  font-family: inherit;
+  color: #e9eef5;
+}
+
+.tlBar{
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: .75rem;
+  padding: .6rem .7rem;
+  border-radius: 12px;
+  background: rgba(7, 7, 11, 0.505);
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 10px 24px rgba(0,0,0,.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ---- Buttons & pills ---- */
+.tlBtn{
+  display: grid;
+  place-items: center;
+  width: s9px; height: 34px;
+  border-radius: 9px;
+  background: rgba(255,255,255,.06);
+  color: #e9eef5;
+  border: 1px solid rgba(255,255,255,.14);
+  cursor: pointer;
+  
+  transition: filter .15s ease, background .15s ease, border-color .15s ease;
+}
+.tlBtn:hover{ filter: brightness(1.08); }
+.tlBtn:active{ filter: brightness(0.96); }
+.tlBtn--primary{ background: rgba(134,207,255,.12); border-color: rgba(134,207,255,.30); }
+.tlBtn--ghost{ background: rgba(255,255,255,.04); }
+
+.tlPill{
+  height: 30px; padding: 0 .6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+  color: #e9eef5;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s ease, border-color .15s ease;
+}
+.tlPill:hover{ background: rgba(255,255,255,.10); }
+.tlPill.is-live{ border-color: rgba(92,255,162,.35); background: rgba(92,255,162,.12); }
+
+/* ---- Range block ---- */
+.tlRange{
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: .5rem;
+  align-items: center;
+  min-width: 300px;
+}
+.tlEdge{
+  font-size: .72rem;
+  opacity: .9;
+  white-space: nowrap;
+}
+
+/* Track + floating label wrapper */
+.tlTrackWrap{
+  position: relative;
+  --thumbW: 18px;                 /* input range thumb genişliği */
+  --pct: 0;                       /* 0..1 (TSX’ten style ile geliyor) */
+}
+
+/* Floating label + tiny tick */
+.tlNow{
+  position: absolute;
+  top: -28px;
+  left: calc(var(--pct) * (100% - var(--thumbW)) + (var(--thumbW) / 2));
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.tlNow__label{
+  position: relative;
+  font-size: .74rem;
+  line-height: 1;
+  padding: .28rem .44rem;
+  border-radius: 10px;
+  background: rgba(16,16,20,.92);
+  color: #e9eef5;
+  border: 1px solid rgba(255,255,255,.16);
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  white-space: nowrap;
+}
+.tlNow__label::after{
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -6px;
+  width: 0; height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid rgba(16,16,20,.92);
+  filter: drop-shadow(0 1px 0 rgba(255,255,255,.16));
+}
+/* İstersen ince bir düşey iğne (çizgi). Varsayılan kapalı. */
+.tlNow__tick{ display:none; }
+
+/* ---- Slider (cross-browser) ---- */
+.tlSlider{
+  width: 100%;
+  height: 4px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  accent-color: #9ad1ff;          /* modern tarayıcılar */
+}
+
+/* WebKit */
+.tlSlider::-webkit-slider-runnable-track{
+  height: 4px; border-radius: 999px;
+  background: linear-gradient(90deg, #8ecbff 0 var(--pct), rgba(255,255,255,.22) 0) no-repeat,
+              rgba(255,255,255,.18);
+}
+.tlSlider::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  width: var(--thumbW); height: var(--thumbW);
+  border-radius: 50%;
+  background: #cfe9ff;
+  border: 1px solid rgba(134,207,255,.45);
+  margin-top: calc((var(--thumbW) - 4px) / -2);
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+}
+
+/* Firefox */
+.tlSlider::-moz-range-track{
+  height: 4px; border-radius: 999px;
+  background: rgba(255,255,255,.18);
+}
+.tlSlider::-moz-range-progress{
+  height: 4px; border-radius: 999px;
+  background: #8ecbff;
+}
+.tlSlider::-moz-range-thumb{
+  width: var(--thumbW); height: var(--thumbW);
+  border-radius: 50%;
+  background: #cfe9ff;
+  border: 1px solid rgba(134,207,255,.45);
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+}
+
+/* ---- Right controls ---- */
+.tlRight{
+  display: flex;
+  align-items: center; gap: .45rem;
+}
+.tlSelect{
+  height: 30px; border-radius: 8px;
+  background: rgba(255,255,255,.06);
+  color: #e9eef5;
+  border: 1px solid rgba(255,255,255,.14);
+  padding: 0 .45rem;
+}
+
+/* ---- Details (From/To + Load) ---- */
+.tlDetails{
+  margin-top: 8px;
+  padding: .6rem .7rem;
+  border-radius: 10px;
+  background: rgba(16,16,18,.72);
+  border: 1px dashed rgba(255,255,255,.14);
+}
+.tlFields{
+  display: flex; gap: .6rem; align-items: end; flex-wrap: wrap;
+}
+.tlFields label{
+  display: grid; gap: .25rem; font-size: .8rem; opacity: .95;
+}
+.tlFields input[type="datetime-local"]{
+  height: 34px; border-radius: 8px; padding: 0 .45rem;
+  background: rgba(255,255,255,.06); color:#e9eef5;
+  border: 1px solid rgba(255,255,255,.14);
+}
+
+/* ---- Responsive tweaks ---- */
+@media (max-width: 720px){
+  .tlWrap{ bottom: 74px; }
+  .tlEdge{ display:none; }
+  .tlNow{ top: -22px; }
+  .tlNow__label{ font-size: .68rem; padding: .22rem .38rem; }
+}
+/* tlFields yine alta hizalı kalsın */
+.tlFields{
+  display: flex;
+  gap: .6rem .6rem;
+  align-items: end;          /* end'e geri */
+  flex-wrap: wrap;
+}
+
+/* Input/label blokları aynı kalsın */
+.tlFields label{
+  display: grid;
+  gap: .25rem;
+  font-size: .8rem;
+  opacity: .95;
+}
+
+/* Yükleme düğmesini ortala + input yüksekliğine eşitle */
+.tlFields .tlPill{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;           /* input’larla aynı */
+  padding: 0 .72rem;
+  align-self: end;        /* 🔑 yukarı kaçmayı engeller */
+  box-sizing: border-box; /* olası tarayıcı farklarını kapatır */
+  line-height: 1;
+}
+
+/* Butonun yazısı taşmasın diye min genişlik ver (opsiyonel) */
+.tlFields .tlPill{ min-width: 140px; }
+
+/* Hover/focus (stil aynı kalsın) */
+.tlPill:hover{ background: rgba(255,255,255,.10); }
+.tlPill.is-live{ border-color: rgba(92,255,162,.35); background: rgba(92,255,162,.12); }
+
+
+/* === Top Dock (BottomDock'un üstteki versiyonu) === */
+.topDock{
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 10px;                        /* ↓ yerine ↑ */
+  z-index: 740;
+  display: flex;
+  gap: .6rem;
+  padding: .3rem .5rem;
+  background: rgba(14, 17, 25, 0.71);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.38);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* .dockBtn stilleri zaten mevcut (BottomDock için tanımlı) ve yeniden kullanılıyor */
+@media (max-width: 720px){
+  .topDock{ top: 8px; gap: .4em; padding: .4rem; overflow-x: auto; }
+}
+/* Overlay paneli tıklamaz + karartmaz hale getir (flight list için) */
+.drawerOverlay--pass,
+.drawerOverlay--pass.is-open{
+  pointer-events: none;
+  background: transparent !important;
+  opacity: 0 !important;
+}
+/* Uçuş listesi için: overlay tamamen etkisiz/şeffaf */
+.drawerOverlay.drawerOverlay--pass,
+.drawerOverlay.drawerOverlay--pass.is-open{
+  pointer-events: none;
+  background: transparent !important;
+  opacity: 0 !important;
+  z-index: 0; /* güvenlik: tıklama yakalamasın */
+}
+
+
+
+
+
+/* Tipografi: kod kalın + monospaced, tarih sağa yaslı */
+.drawerPanel .optionCard > div:nth-child(1){
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  letter-spacing: .2px;
+}
+.drawerPanel .optionCard > div:nth-child(4){
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: .95;
+}
+
+/* Badge’ler: daha temiz renk ve kontrast */
+.badge{
+  padding: .2rem .5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: .75rem;
+  font-weight: 800;
+}
+.badge::before{ content:"●"; margin-right:.35rem; }
+
+/* Duruma göre renk */
+.drawerPanel .optionCard .badge{ background: transparent; }
+.drawerPanel .optionCard .badge:where(:contains("Tamamlandı")){
+  color: #10b981;
+}
+.drawerPanel .optionCard .badge:where(:contains("Planlandı")){
+  color: #cbd5e1;
+}
+.drawerPanel .optionCard .badge:where(:contains("Devam ediyor")){
+  color: #60a5fa;
+}
+
+/* Liste yüksekliği: daha nefesli scroll alanı */
+.drawerPanel .group [role="table"] > div + div{
+  max-height: 62vh;
+  overflow: auto;
+}
+
+
+
+
+/* ===== Modern Flight List ===== */
+.flightListWrap{ padding:.4rem .4rem .6rem; }
+.flightListToolbar{
+  position: sticky; top: 0; z-index: 2;
+  display:flex; justify-content:space-between; align-items:center;
+  padding:.7rem .6rem; margin: bottom 0.8em;
+  border:1px solid rgba(140, 111, 111, 0.14);
+  background: rgba(29, 29, 50, 0.387);
+  backdrop-filter: blur(6px);
+  border-radius:.4rem;
+}
+.flightListToolbar .toolbarLabel{ font-weight:800; letter-spacing:.2px; }
+.flightListToolbar .toolbarMeta{ font-size:.78rem; opacity:.85; }
+
+.flightList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 62vh;
+  overflow-y: scroll;        /* ← daima scrollbar rezervi olsun */
+  scrollbar-gutter: stable;  /* modern tarayıcılar */
+}
+.flightList::-webkit-scrollbar{ width:10px; }
+.flightList::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.18); border-radius:8px;
+}
+.flightList li + li{ margin-top:.55rem; }
+
+/* Kart/satır */
+.flightItem{
+  width:100%;
+  display:grid;
+  grid-template-columns: 130px 1fr auto;
+  align-items:center;
+  gap:.6rem;
+  padding:.9rem .7rem;
+  border-radius:.75rem;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05);
+  color:#eef3f6; text-align:left; cursor:pointer;
+  transition: transform .12s ease, background .15s ease, border-color .15s ease;
+}
+.flightItem:hover{ transform: translateY(-1px); background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.22); }
+/* Uçuş listesi kartı: focus halkasını içeride çiz ki overflow kesmesin */
+.flightItem:focus,
+.flightItem:focus-visible {
+  outline: none;                          /* tarayıcı outline’ını kapat */
+  box-shadow: inset 0 0 0 2px #6aa9ff,    /* içe doğru mavi halka */
+              0 2px 8px rgba(0,0,0,.35);  /* mevcut gölge dursun */
+}
+
+/* Aktifte yukarı kayma clipping yapmasın */
+.flightItem:active {
+  transform: translateY(0);               /* hover’daki -1px’i nötrle */
+}
+
+/* İhtiyaten yatay kesilmeyi tamamen bitirmek istersen: */
+.flightList { overflow-x: visible; }      /* sadece dikey scroll kalsın */
+
+/* Zebra */
+.flightList li:nth-child(odd) .flightItem{ background: rgba(255,255,255,.045); }
+
+/* Sol blok */
+.fiLeft{ display:grid; gap:.12rem; }
+.fiCode{
+  font-weight:900; font-size:1.05rem; letter-spacing:.3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+.fiTime{ font-size:.8rem; opacity:.8; font-variant-numeric: tabular-nums; }
+
+/* Orta rota */
+.fiCenter{ display:flex; align-items:center; justify-content:center; gap:.35rem; }
+.iata{ font-weight:700; opacity:.95; }
+.arrow{ opacity:.6; }
+
+/* Sağ rozet */
+.fiRight{ display:flex; justify-content:flex-end; }
+.fiBadge{
+  display:inline-flex; align-items:center; gap:.35rem;
+  padding:.22rem .6rem; border-radius:999px; font-size:.78rem; font-weight:800;
+  border:1px solid transparent;
+}
+.fiBadge::before{ content:"●"; font-size:.8em; }
+
+/* Durum renkleri */
+.fiBadge--Tamamlandı{ color:#10b981; background: rgba(16,185,129,.18); border-color: rgba(16,185,129,.28); }
+.fiBadge--Planlandı{ color:#cbd5e1; background: rgba(148,163,184,.18); border-color: rgba(148,163,184,.28); }
+.fiBadge--Devam_ediyor{ color:#93c5fd; background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.28); }
+
+/* Küçük ekran düzeni */
+@media (max-width: 520px){
+  .flightItem{
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "left right"
+      "center center";
+    row-gap:.35rem;
+  }
+  .fiLeft{ grid-area:left; }
+  .fiCenter{ grid-area:center; }
+  .fiRight{ grid-area:right; }
+}
+.emptyState{
+  display:grid; place-items:center; gap:.25rem; padding:1.2rem 0; opacity:.9;
+}
+.emptyIcon{ font-size:1.4rem; }
+.emptyText{ font-weight:700; letter-spacing:.2px; }
+
+/* === Segmented control (Bugün / Dün–Yarın / Tümü) === */
+.seg{
+  display: inline-flex;
+  gap: 0;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255,255,255,.06);
+}
+.seg__btn{
+  padding: .52rem .7rem;
+  border: 0;
+  background: transparent;
+  color: #e9eef5;
+  font-weight: 700;
+  letter-spacing: .2px;
+  cursor: pointer;
+}
+.seg__btn + .seg__btn{
+  border-left: 1px solid rgba(255,255,255,.14);
+}
+.seg__btn:hover{ background: rgba(255,255,255,.08); }
+.seg__btn.is-active{
+  background: rgba(134,207,255,.16);
+  box-shadow: inset 0 0 0 1px rgba(134,207,255,.35);
+}
+
+
+/*Planlandı zamanlandı devam ediyor*/
+.fiRight {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+.fiBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 90px;           /* metne göre genişlesin ama minimum aynı olsun */
+  padding: 0 .7rem;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: .7rem;
+  white-space: nowrap;
+  line-height: 1;             /* dikey ortalama */
+  border: 1px solid transparent;
+  transition: transform .15s ease, background .15s ease;
+}
+.fiBadge::before {
+  content: "●";
+  font-size: .7em;
+  margin-right: .4rem;
+  position: relative;
+  top: 0px;
+  opacity: .9;
+}
+.fiBadge:hover {
+  transform: scale(1.04);
+}
+
+/* === Flight List search bar === */
+.searchBar{
+  display:flex;
+  align-items:center;
+  gap:.45rem;
+  position:relative;
+}
+
+.searchInput{
+  flex:1;
+  background: rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:8px;
+  color:#f1f5f9;
+  font-size:.9rem;
+  padding:.45rem .7rem .45rem 1.9rem; /* sola ikon boşluğu */
+  outline:none;
+  transition:border-color .15s ease, background .15s ease;
+}
+.searchInput::placeholder{
+  color:rgba(255,255,255,.45);
+  letter-spacing:.2px;
+}
+.searchInput:focus{
+  background: rgba(255,255,255,.08);
+  border-color: rgba(134,207,255,.4);
+}
+
+.searchIcon{
+  position:absolute;
+  left:.55rem;
+  color:rgba(255,255,255,.5);
+  pointer-events:none;
+}
+
+
+/* === Soldan açılan uçuş listesi paneli === */
+.drawerPanel.drawerPanel--left {
+  left: 0;
+  right: auto;
+  transform: translateX(-100%);
+  transition: transform .25s ease;
+}
+
+.drawerPanel.drawerPanel--left.is-open {
+  transform: translateX(0);
+}
+
+.topDock .dockBtn svg{ transition: transform .25s ease; }
+.topDock .dockBtn:hover svg{ transform: rotate(90deg); }
+.topDock .dockBtn.is-danger{
+  background: rgba(245,90,90,.16);
+  border-color: rgba(245,90,90,.30);
+}

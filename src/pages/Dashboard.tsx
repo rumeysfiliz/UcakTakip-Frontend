@@ -2,38 +2,18 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import Map from '../components/Map'
 import type { UcusPlani, UcakKonum } from '../types'
-import { getFlights, getLastPosition, getRangePositions, postPosition } from '../api'
+import { getFlights, getLastPosition, getRangePositions } from '../api'
 import FlightPlanner from '../components/FlightPlanner'
 import TopBar from "../components/TopBar"
 import "../styles/topbar.css"
 import type { Continent } from '../lib/continents'
 import { flightContinentFrom } from '../lib/continents'
 import FlightInfoCard from "../components/FlightInfoCard"
-import { iataToLatLng } from '../lib/airports'
 import FlightListPanel from "../components/FlightListPanel";
-import { getFlightsByDateRange } from "../api"
+import BottomDock from "../components/BottomDock";
 
+import TimelineBar from "../components/TimeLineBar";
 
-/* =========================
-   TSİ sadece GÖRÜNÜM için (input/etiket)
-   ========================= */
-function toLocalInputValue(d: Date) {
-  const parts = new Intl.DateTimeFormat('tr-TR', {
-    timeZone: 'Europe/Istanbul',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(d)
-  const get = (t: string) => parts.find(p => p.type === t)?.value ?? '00'
-  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`
-}
-function fmtTSI(d: Date | number | string) {
-  const dt = typeof d === 'number' ? new Date(d) : new Date(d)
-  return new Intl.DateTimeFormat('tr-TR', {
-    timeZone: 'Europe/Istanbul',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false
-  }).format(dt)
-}
 
 /* =========================
    İnterpolasyon (replay)
@@ -94,6 +74,8 @@ export default function Dashboard() {
   const playTimerRef = useRef<number | null>(null)
   const [playSpeed, setPlaySpeed] = useState<0.5 | 1 | 2 | 4>(1)
 
+
+
   // Takip
   const [isTracking, setIsTracking] = useState(false)
   const [refreshMs, setRefreshMs] = useState<number>(3000)
@@ -129,7 +111,14 @@ export default function Dashboard() {
   // Dashboard component FONKSİYONUNUN İÇİNDE (en üstlerde) :
   const [filterOpen, setFilterOpen] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
-  const [listOpen, setListOpen] = useState(false);
+  const [listOpen, setListOpen] = useState<boolean>(() => {
+    const s = localStorage.getItem("listOpen");
+    return s ? s === "1" : true;     // ilk açılışta liste açık olsun
+  });
+
+  useEffect(() => {
+    localStorage.setItem("listOpen", listOpen ? "1" : "0");
+  }, [listOpen]);
 
   // Açık çekmece genişliği (px) — hook'lar koşulsuz ve component gövdesinde.
   const [drawerW, setDrawerW] = useState(0);
@@ -146,8 +135,16 @@ export default function Dashboard() {
     return () => window.removeEventListener("resize", remeasure);
   }, [filterOpen, plannerOpen, listOpen]);
 
-  const anyDrawerOpen = filterOpen || plannerOpen || listOpen;
-  const cardOffset = anyDrawerOpen ? (drawerW + 12) : 12;
+
+  // sağ çekmeceler: Filters (400px), Planner (460px)  → responsive: min(..., 92vw)
+  const rightDrawerW = (() => {
+    const vw = Math.floor(window.innerWidth * 0.92);
+    if (filterOpen) return Math.min(400, vw);
+    if (plannerOpen) return Math.min(460, vw);
+    return 0;
+  })();
+  const cardRightOffset = rightDrawerW ? rightDrawerW + 12 : 12; // 12px boşluk
+
   // Kıta filtresi
   const ALL: Continent[] = ['Europe', 'Asia', 'NorthAmerica', 'SouthAmerica', 'Africa', 'Oceania', 'Antarctica', 'Other']
   const [enabledContinents, setEnabledContinents] = useState<Set<Continent>>(new Set(ALL))
@@ -155,7 +152,9 @@ export default function Dashboard() {
 
   // Alt panel
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
-  const [timelineOpen, setTimelineOpen] = useState(true)
+  const [timelineOpen, setTimelineOpen] = useState(false)
+
+
 
   // İlk yükleme
   useEffect(() => {
@@ -277,26 +276,26 @@ export default function Dashboard() {
   ) as Record<number, UcakKonum[]>;
 
   //önce trail, sonra DB last, en sonda plan-koordinat ghost
-const displayLastPositions: Record<number, UcakKonum | null> = Object.fromEntries(
-  flights.map(f => {
-    const refIso = (mode === 'replay') ? displayTime : nowIso;
+  const displayLastPositions: Record<number, UcakKonum | null> = Object.fromEntries(
+    flights.map(f => {
+      const refIso = (mode === 'replay') ? displayTime : nowIso;
 
-    // 🔵 REPLAY: önce trail interp, yoksa plan-ghost
-    if (mode === 'replay') {
-      const hasTrail = (trails[f.id]?.length ?? 0) > 0;
-      if (hasTrail) {
-        const viaTrail = interpAt(trails[f.id], refIso);
-        return [f.id, viaTrail];
+      // 🔵 REPLAY: önce trail interp, yoksa plan-ghost
+      if (mode === 'replay') {
+        const hasTrail = (trails[f.id]?.length ?? 0) > 0;
+        if (hasTrail) {
+          const viaTrail = interpAt(trails[f.id], refIso);
+          return [f.id, viaTrail];
+        }
+        // trail yoksa slider anına göre plan-ghost
+        return [f.id, ghostPositionFromPlan(f, refIso)];
       }
-      // trail yoksa slider anına göre plan-ghost
-      return [f.id, ghostPositionFromPlan(f, refIso)];
-    }
 
-    // 🔴 LIVE: sadece DB last (ghost yok)
-    if (lastPositions[f.id]) return [f.id, lastPositions[f.id]];
-    return [f.id, null];
-  })
-) as Record<number, UcakKonum | null>;
+      // 🔴 LIVE: sadece DB last (ghost yok)
+      if (lastPositions[f.id]) return [f.id, lastPositions[f.id]];
+      return [f.id, null];
+    })
+  ) as Record<number, UcakKonum | null>;
 
 
 
@@ -330,6 +329,10 @@ const displayLastPositions: Record<number, UcakKonum | null> = Object.fromEntrie
   const filteredFlights = flights.filter(f => visibleFlightIds.includes(f.id))
   const filteredLastPositions = Object.fromEntries(Object.entries(displayLastPositions).filter(([id]) => visibleFlightIds.includes(Number(id)))) as Record<number, UcakKonum | null>
   const filteredTrails = Object.fromEntries(Object.entries(displayTrails).filter(([id]) => visibleFlightIds.includes(Number(id)))) as Record<number, UcakKonum[]>
+ 
+
+  // ...Dashboard component içinde, state’lerin yanında küçük bir detay state’i:
+  const [tlDetailsOpen, setTlDetailsOpen] = useState(false);
 
   /* Oynatma */
   const totalHours = (maxMs - minMs) / 3_600_000
@@ -373,11 +376,6 @@ const displayLastPositions: Record<number, UcakKonum | null> = Object.fromEntrie
 
               // 3) SADECE BİR KEZ ekranda görünmesi için seç
               setSelectedId(f.id);
-
-              // 🚫 ÖNEMLİ: Burada artık konum YAZMIYORUZ.
-              // - postPosition YOK
-              // - getLastPosition/getRangePositions ile hemen fetch YOK
-              // Konum yazmak sadece simülatörün işi olacak.
             }}
           />
         }
@@ -415,153 +413,75 @@ const displayLastPositions: Record<number, UcakKonum | null> = Object.fromEntrie
           lastPositions={displayLastPositions}
           mode={mode}
           refIso={mode === "replay" ? displayTime : nowIso}
-          onSelect={(id) => { setSelectedId(id); setListOpen(false); }}
+          onSelect={(id) => { setSelectedId(id); /* liste açık kalsın */ }}
 
         />
-        {/* === ALT PANEL — TSİ görünüm === */}
-        {timelineOpen ? (
-          <div style={{ position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 520 }}>
-            <div className="timeline">
-              {/* HEAD */}
-              <div className="timeline__head">
-                <div className="timeline__title">
-                  <span style={{ width: 44, height: 4, borderRadius: 999, background: 'rgba(255,255,255,.25)' }} />
-                  Zaman Çizgisi & İşlemler (TSİ)
-                </div>
+        {/* === YENİ ZAMAN ÇİZGİSİ === */}
+        {timelineOpen && (
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 740 }}>
+            <TimelineBar
+              playing={isPlaying}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
 
-                <div className="timeline__controls">
-                  <button
-                    className="btn btn--ghost"
-                    onClick={() => {
-                      if (mode !== "replay") return;
-                      if (+new Date(displayTime) >= maxMs)
-                        setDisplayTime(new Date(minMs).toISOString());
-                      setIsPlaying((p) => !p);
-                    }}
-                    disabled={mode !== "replay"}
-                  >
-                    {isPlaying ? "Durdur" : "Oynat"}
-                  </button>
+              rangeStartMs={+new Date(fromUtc)}
+              rangeEndMs={+new Date(toUtc)}
+              cursorMs={+new Date(mode === 'replay' ? displayTime : nowIso)}
+              onScrub={(ms) => {
+                setIsPlaying(false);
+                setMode('replay');
+                setDisplayTime(new Date(ms).toISOString());
+              }}
 
-                  <select
-                    value={playSpeed}
-                    onChange={(e) => setPlaySpeed(Number(e.target.value) as any)}
-                    disabled={mode !== 'replay'}
-                    className="btn btn--sm"
-                    title="Oynatma hızı"
-                  >
-                    <option value={0.5}>0.5x</option>
-                    <option value={1}>1x</option>
-                    <option value={2}>2x</option>
-                    <option value={4}>4x</option>
-                  </select>
 
-                  <button className="btn btn--ghost btn--sm" onClick={() => { setIsPlaying(false); setDisplayTime(new Date(minMs).toISOString()) }}>En başa</button>
-                  <button className="btn btn--ghost btn--sm" onClick={() => { setIsPlaying(false); setDisplayTime(new Date(maxMs).toISOString()) }}>En sona</button>
+              speed={playSpeed}
+              onChangeSpeed={(s) => setPlaySpeed(s as any)}
 
-                  <button
-                    className="btn btn--primary btn--sm"
-                    onClick={() => {
-                      setMode('live')
-                      setDisplayTime(new Date().toISOString())
-                      setStatusMsg('Canlı moda geçtin.')
-                      setIsPlaying(false)
-                      setTimelineOpen(false)
-                    }}
-                  >
-                    Şimdi (Canlı)
-                  </button>
+              onJumpNow={() => {
+                setMode('live');                          // canlı moda geç
+                setDisplayTime(new Date().toISOString()); // zamanı şimdiye al
+                setTimelineOpen(false);                   // 🎬 timeline panelini kapat
+              }}
+              isLiveNow={
+                +new Date(nowIso) >= +new Date(fromUtc) &&
+                +new Date(nowIso) <= +new Date(toUtc)
+              }
 
-                  <button className="iconBtn--round" onClick={() => setTimelineOpen(false)} title="Kapat">✕</button>
-                </div>
-              </div>
-
-              {/* DATETIME + ACTIONS — giriş TSİ, state UTC */}
-              <div className="timeline__grid">
-                <label className="plannerField">
-                  <span className="plannerLabel">From (TSİ)</span>
-                  <input
-                    type="datetime-local"
-                    value={toLocalInputValue(new Date(fromUtc))}
-                    onChange={(e) => { setIsPlaying(false); setFromUtc(new Date(e.target.value).toISOString()) }}
-                    className="plannerInput"
-                  />
-                </label>
-
-                <label className="plannerField">
-                  <span className="plannerLabel">To (TSİ)</span>
-                  <input
-                    type="datetime-local"
-                    value={toLocalInputValue(new Date(toUtc))}
-                    onChange={(e) => { setIsPlaying(false); setToUtc(new Date(e.target.value).toISOString()) }}
-                    className="plannerInput"
-                  />
-                </label>
-
-                <div style={{ display: 'flex', gap: 8, alignItems: 'end', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                  <button className="btn btn--primary btn--sm" onClick={() => { setIsPlaying(false); loadHistoryForAll() }}>Aralığı Yükle (Tümü)</button>
-                </div>
-              </div>
-
-              {/* STATUS */}
-              {statusMsg && <div className="timeline__status">{statusMsg}</div>}
-
-              {/* SLIDER — etiketler TSİ */}
-              {mode === 'replay' ? (
-                <>
-                  <input
-                    className="range"
-                    type="range"
-                    min={minMs}
-                    max={maxMs}
-                    step={stepSec * 1000}
-                    value={clampedDisplayMs}
-                    onChange={(e) => { setIsPlaying(false); setDisplayTime(new Date(Number(e.target.value)).toISOString()) }}
-                    style={{ backgroundSize: `${((clampedDisplayMs - minMs) / (maxMs - minMs)) * 100}% 100%` }}
-                  />
-                  <div className="timeline__ticks">
-                    <span>{fmtTSI(minMs)}</span>
-                    <span style={{ fontWeight: 700 }}>{fmtTSI(clampedDisplayMs)}</span>
-                    <span>{fmtTSI(maxMs)}</span>
-                  </div>
-                </>
-              ) : (
-                <div className="timeline__status">Canlı moddasın. Geçmiş için “Aralığı Yükle”yi kullan.</div>
-              )}
-            </div>
-          </div>
-        ) : (
-          // KAPALI – ince bar
-          <div style={{ position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 520 }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              background: 'rgba(15,15,15,0.78)', color: '#fff',
-              border: '1px solid rgba(255,255,255,.18)', borderRadius: 12,
-              padding: '8px 12px', boxShadow: '0 8px 24px rgba(0,0,0,.35)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 44, height: 4, borderRadius: 999, background: 'rgba(255,255,255,.25)' }} />
-                <strong style={{ opacity: .92 }}>Zaman Çizgisi & İşlemler (TSİ)</strong>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn--ghost" onClick={() => setTimelineOpen(true)}>Aç</button>
-                <button className="btn btn--ghost" onClick={() => { setIsPlaying(false); setDisplayTime(new Date(minMs).toISOString()) }}>En başa</button>
-                <button className="btn btn--ghost" onClick={() => { setIsPlaying(false); setDisplayTime(new Date(maxMs).toISOString()) }}>En sona</button>
-                <button
-                  className="btn btn--primary"
-                  onClick={() => {
-                    setMode('live')
-                    setDisplayTime(new Date().toISOString())
-                    setStatusMsg('Canlı moda geçtin.')
-                    setIsPlaying(false)
-                  }}
-                >
-                  Şimdi (Canlı)
-                </button>
-              </div>
-            </div>
+              detailsOpen={tlDetailsOpen}
+              onToggleDetails={() => setTlDetailsOpen(v => !v)}
+              onChangeRange={(st, en) => {
+                setIsPlaying(false);
+                setFromUtc(new Date(st).toISOString());
+                setToUtc(new Date(en).toISOString());
+              }}
+              onLoadRange={() => { setIsPlaying(false); loadHistoryForAll(); }}
+            />
           </div>
         )}
+        <BottomDock
+          onOpenList={() => {
+            setListOpen(v => !v);     // ← toggle
+            setFilterOpen(false);
+            setPlannerOpen(false);
+          }}
+          onOpenFilters={() => {
+            setFilterOpen(v => !v);   // ← toggle
+            setListOpen(false);
+            setPlannerOpen(false);
+          }}
+          onOpenPlanner={() => {
+            setPlannerOpen(v => !v);  // ← toggle
+            setFilterOpen(false);
+            setListOpen(false);
+          }}
+          onToggleTimeline={() => {
+            setListOpen(false);
+            setFilterOpen(false);
+            setPlannerOpen(false);
+            setTimelineOpen(v => !v); // zaten toggle
+          }}
+          timelineOpen={timelineOpen}
+        />
 
 
         {selectedId && flights.find(f => f.id === selectedId) && (
@@ -569,8 +489,7 @@ const displayLastPositions: Record<number, UcakKonum | null> = Object.fromEntrie
             flight={flights.find(f => f.id === selectedId)!}
             last={displayLastPositions[selectedId] ?? null}
             onClose={() => setSelectedId(null)}
-            offsetRightPx={cardOffset}
-            selectedTimeUtc={mode === 'replay' ? displayTime : nowIso}
+            offsetRightPx={cardRightOffset} selectedTimeUtc={mode === 'replay' ? displayTime : nowIso}
           />
         )}
       </div>
