@@ -323,7 +323,7 @@ export default function Map({
             )
 
           // 🔥 Stil farkı: seçili uçuş kalın ve opak, diğerleri ince ve yarı saydam
-          const lineWeight = isSelected ? 3.5 : 2
+          const lineWeight = isSelected ? 2.5 : 1.5
           const lineOpacity = isSelected ? 0.95 : 0.4
           const dashOpacity = isSelected ? 0.85 : 0.3
 
@@ -477,7 +477,7 @@ export default function Map({
                         position={shiftedRef as any}
                         opacity={mode === "replay" ? 0.95 : isSelected ? 1 : 0.55}
                         zIndexOffset={isSelected ? 1000 : 0}
-                        icon={makePlaneIcon((last as any)?.heading ?? 0, cont, theme, isSelected ? 25 : 18, isSelected ? 1.3 : 1)}
+                        icon={makePlaneIcon((last as any)?.heading ?? 0, cont, theme, isSelected ? 35 : 25, isSelected ? 1.3 : 1)}
                         eventHandlers={{ click: () => onSelect(f.id) }}
                       >
                         <Tooltip direction="top" offset={[0, -6]} className="tt-ghost">
