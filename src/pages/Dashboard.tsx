@@ -155,7 +155,16 @@ export default function Dashboard() {
   const [timelineOpen, setTimelineOpen] = useState(false)
 
 
-
+  function rhumbBearingDeg(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const toRad = (x: number) => x * Math.PI / 180;
+    const toDeg = (x: number) => x * 180 / Math.PI;
+    const φ1 = toRad(lat1), φ2 = toRad(lat2);
+    let Δλ = toRad(lon2 - lon1);
+    if (Math.abs(Δλ) > Math.PI) Δλ = Δλ > 0 ? -(2 * Math.PI - Δλ) : (2 * Math.PI + Δλ);
+    const Δψ = Math.log(Math.tan(Math.PI / 4 + φ2 / 2) / Math.tan(Math.PI / 4 + φ1 / 2));
+    const θ = Math.atan2(Δλ, Δψ);
+    return (toDeg(θ) + 360) % 360;
+  }
   // İlk yükleme
   useEffect(() => {
     (async () => {
@@ -214,15 +223,18 @@ export default function Dashboard() {
     if (
       f.originLat == null || f.originLng == null ||
       f.destinationLat == null || f.destinationLng == null
-    ) return null
-
+    ) return null;
     const tA = +new Date(f.startTimeUtc)
     const tB = f.endTimeUtc ? +new Date(f.endTimeUtc) : (tA + 2 * 3600_000)
     const ref = Math.min(Math.max(+new Date(refIso), tA), tB)
     const r = ref >= tB ? 1 : ref <= tA ? 0 : (ref - tA) / (tB - tA);
     const lat = f.originLat + (f.destinationLat - f.originLat) * r
     const lng = f.originLng + (f.destinationLng - f.originLng) * r
-
+    const heading = rhumbBearingDeg(
+      r < 1 ? f.originLat : (f.destinationLat + f.originLat) / 2,  // r==1’de de anlamlı bir yön verelim
+      r < 1 ? f.originLng : (f.destinationLng + f.originLng) / 2,
+      f.destinationLat, f.destinationLng
+    );
     return {
       id: 0,
       ucusPlaniId: f.id,
@@ -230,7 +242,7 @@ export default function Dashboard() {
       latitude: lat,
       longitude: lng,
       altitude: 0,
-      heading: 0
+      heading,
     }
   }
 
@@ -267,9 +279,17 @@ export default function Dashboard() {
       const midLat = f.originLat + (f.destinationLat - f.originLat) * r;
       const midLng = f.originLng + (f.destinationLng - f.originLng) * r;
 
+      const hd = rhumbBearingDeg(f.originLat, f.originLng, f.destinationLat, f.destinationLng);
+
       return [f.id, [
-        { id: 0, ucusPlaniId: f.id, timestampUtc: new Date(tA).toISOString(), latitude: f.originLat, longitude: f.originLng, altitude: 0, heading: 0 },
-        { id: 0, ucusPlaniId: f.id, timestampUtc: new Date(ref).toISOString(), latitude: midLat, longitude: midLng, altitude: 0, heading: 0 },
+        {
+          id: 0, ucusPlaniId: f.id, timestampUtc: new Date(tA).toISOString(),
+          latitude: f.originLat, longitude: f.originLng, altitude: 0, heading: hd
+        },
+        {
+          id: 0, ucusPlaniId: f.id, timestampUtc: new Date(ref).toISOString(),
+          latitude: midLat, longitude: midLng, altitude: 0, heading: hd
+        },
       ]];
     })
   ) as Record<number, UcakKonum[]>;
@@ -290,7 +310,6 @@ export default function Dashboard() {
         return [f.id, ghostPositionFromPlan(f, refIso)];
       }
 
-      // 🔴 LIVE: sadece DB last (ghost yok)
       // YENİ: uçuş bitmişse (endTimeUtc var ve şimdi > end), ghost üret (r=1 → varış)
       const now = +new Date(nowIso);
       if (f.endTimeUtc && now >= +new Date(f.endTimeUtc)) {
