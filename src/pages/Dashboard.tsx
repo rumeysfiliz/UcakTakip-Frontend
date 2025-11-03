@@ -219,8 +219,7 @@ export default function Dashboard() {
     const tA = +new Date(f.startTimeUtc)
     const tB = f.endTimeUtc ? +new Date(f.endTimeUtc) : (tA + 2 * 3600_000)
     const ref = Math.min(Math.max(+new Date(refIso), tA), tB)
-    const r = tB > tA ? (ref - tA) / (tB - tA) : 0
-
+    const r = ref >= tB ? 1 : ref <= tA ? 0 : (ref - tA) / (tB - tA);
     const lat = f.originLat + (f.destinationLat - f.originLat) * r
     const lng = f.originLng + (f.destinationLng - f.originLng) * r
 
@@ -292,6 +291,11 @@ export default function Dashboard() {
       }
 
       // 🔴 LIVE: sadece DB last (ghost yok)
+      // YENİ: uçuş bitmişse (endTimeUtc var ve şimdi > end), ghost üret (r=1 → varış)
+      const now = +new Date(nowIso);
+      if (f.endTimeUtc && now >= +new Date(f.endTimeUtc)) {
+        return [f.id, ghostPositionFromPlan(f, nowIso)];
+      }
       if (lastPositions[f.id]) return [f.id, lastPositions[f.id]];
       return [f.id, null];
     })
@@ -329,7 +333,7 @@ export default function Dashboard() {
   const filteredFlights = flights.filter(f => visibleFlightIds.includes(f.id))
   const filteredLastPositions = Object.fromEntries(Object.entries(displayLastPositions).filter(([id]) => visibleFlightIds.includes(Number(id)))) as Record<number, UcakKonum | null>
   const filteredTrails = Object.fromEntries(Object.entries(displayTrails).filter(([id]) => visibleFlightIds.includes(Number(id)))) as Record<number, UcakKonum[]>
- 
+
 
   // ...Dashboard component içinde, state’lerin yanında küçük bir detay state’i:
   const [tlDetailsOpen, setTlDetailsOpen] = useState(false);
